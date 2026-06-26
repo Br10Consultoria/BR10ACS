@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Save, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, Save, ChevronDown, ChevronRight, Zap, X } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui'
 import { presetsApi } from '@/api'
 import toast from 'react-hot-toast'
@@ -53,6 +53,9 @@ function PresetsTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
   const [newName, setNewName] = useState('')
   const [newJson, setNewJson] = useState('{\n  "weight": 100,\n  "precondition": "true",\n  "provisions": [["inform"]]\n}')
   const [showNew, setShowNew] = useState(false)
+  const [showTemplate, setShowTemplate] = useState(false)
+  const [templateOui, setTemplateOui] = useState('')
+  const [templateModel, setTemplateModel] = useState('')
 
   const { data: presets = [], isLoading } = useQuery({
     queryKey: ['presets'],
@@ -76,6 +79,20 @@ function PresetsTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
     onError: () => toast.error('Erro ao salvar preset'),
   })
 
+  const templateMut = useMutation({
+    mutationFn: ({ oui, productClass }: { oui: string; productClass?: string }) =>
+      presetsApi.applyTemplate(oui, productClass),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['presets'] })
+      qc.invalidateQueries({ queryKey: ['provisions'] })
+      toast.success(`Template aplicado: ${res.data?.preset || 'OK'}`)
+      setShowTemplate(false)
+      setTemplateOui('')
+      setTemplateModel('')
+    },
+    onError: () => toast.error('Erro ao aplicar template'),
+  })
+
   const handleSaveNew = () => {
     if (!newName.trim()) return toast.error('Informe um nome')
     try {
@@ -92,13 +109,80 @@ function PresetsTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
         <p className="text-sm text-slate-500">
           Presets definem quais provisões são executadas em cada dispositivo com base em condições.
         </p>
-        <button
-          onClick={() => setShowNew(!showNew)}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" /> Novo Preset
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowTemplate(!showTemplate)}
+            className="flex items-center gap-2 px-3 py-2 bg-amber-500 text-white text-sm rounded-lg hover:bg-amber-600"
+            title="Criar template de coleta automática para um modelo"
+          >
+            <Zap className="w-4 h-4" /> Aplicar Template
+          </button>
+          <button
+            onClick={() => setShowNew(!showNew)}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" /> Novo Preset
+          </button>
+        </div>
       </div>
+
+      {/* Modal de Template */}
+      {showTemplate && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-amber-800">Aplicar Template de Coleta</CardTitle>
+              <button onClick={() => setShowTemplate(false)}><X className="w-4 h-4 text-slate-400" /></button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-amber-700">
+              Cria automaticamente uma <strong>Provisão + Preset</strong> que força a coleta de sinal óptico,
+              PPPoE, tráfego, Wi-Fi e hosts para <strong>todos os dispositivos</strong> com o OUI informado.
+              Após aplicar, todos os dispositivos desse modelo serão coletados automaticamente a cada Inform.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">OUI (obrigatório)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 30E1F1 ou 808544"
+                  value={templateOui}
+                  onChange={(e) => setTemplateOui(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <p className="text-xs text-slate-400 mt-1">Primeiros 6 dígitos do serial (ex: Intelbras = 30E1F1 ou 808544)</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Modelo (opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 1200R"
+                  value={templateModel}
+                  onChange={(e) => setTemplateModel(e.target.value)}
+                  className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <p className="text-xs text-slate-400 mt-1">Deixe vazio para aplicar a todos os dispositivos do OUI</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => templateMut.mutate({ oui: templateOui.trim(), productClass: templateModel.trim() || undefined })}
+                disabled={templateMut.isPending || !templateOui.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white text-sm rounded-lg hover:bg-amber-600 disabled:opacity-50"
+              >
+                <Zap className="w-4 h-4" /> {templateMut.isPending ? 'Aplicando...' : 'Aplicar Template'}
+              </button>
+              <button
+                onClick={() => setShowTemplate(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {showNew && (
         <Card>
@@ -154,6 +238,11 @@ function PresetsTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
                   <span className="font-medium text-slate-800">{p._id}</span>
                   {p.weight !== undefined && (
                     <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">peso: {p.weight}</span>
+                  )}
+                  {p._id.startsWith('br10acs_') && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded flex items-center gap-1">
+                      <Zap className="w-3 h-3" /> template automático
+                    </span>
                   )}
                 </div>
                 <button
@@ -274,6 +363,11 @@ function ProvisionsTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
                 <div className="flex items-center gap-3">
                   {expanded === p._id ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
                   <span className="font-medium text-slate-800">{p._id}</span>
+                  {p._id.startsWith('br10acs_') && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded flex items-center gap-1">
+                      <Zap className="w-3 h-3" /> template automático
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); deleteMut.mutate(p._id) }}

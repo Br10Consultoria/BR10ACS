@@ -1,17 +1,20 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Search, Filter, RefreshCw, Router, Clock, Wifi, WifiOff } from 'lucide-react'
+import { Search, Filter, RefreshCw, Router, Clock, Wifi, WifiOff, Trash2 } from 'lucide-react'
 import { devicesApi } from '@/api'
 import { Card, Badge, LoadingScreen, Table, Th, Td } from '@/components/ui'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import toast from 'react-hot-toast'
 
 export default function DevicesPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all')
   const [page, setPage] = useState(1)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const limit = 20
+  const queryClient = useQueryClient()
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['devices', search, statusFilter, page],
@@ -24,11 +27,56 @@ export default function DevicesPage() {
     refetchInterval: 30000,
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => devicesApi.delete(id),
+    onSuccess: () => {
+      toast.success('Dispositivo removido do ACS')
+      setConfirmDelete(null)
+      queryClient.invalidateQueries({ queryKey: ['devices'] })
+    },
+    onError: () => toast.error('Erro ao remover dispositivo'),
+  })
+
   const devices: Record<string, unknown>[] = data?.data || data?.devices || data || []
   const total: number = data?.total || devices.length
 
   return (
     <div className="space-y-5">
+      {/* Modal de confirmação de exclusão */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-800">Remover dispositivo?</h3>
+                <p className="text-xs text-slate-500 font-mono">{confirmDelete}</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-5">
+              O dispositivo será removido do GenieACS. Ele voltará a aparecer se conectar novamente ao ACS.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(confirmDelete)}
+                disabled={deleteMutation.isPending}
+                className="flex-1 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? 'Removendo...' : 'Remover'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filtros */}
       <Card className="p-4">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -91,6 +139,7 @@ export default function DevicesPage() {
                   <Th>IP</Th>
                   <Th>Hosts</Th>
                   <Th>Último Inform</Th>
+                  <Th></Th>
                 </tr>
               </thead>
               <tbody>
@@ -145,12 +194,21 @@ export default function DevicesPage() {
                           </span>
                         </div>
                       </Td>
+                      <Td>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(id) }}
+                          title="Remover dispositivo"
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </Td>
                     </tr>
                   )
                 })}
                 {devices.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-slate-400 text-sm">
+                    <td colSpan={8} className="px-4 py-12 text-center text-slate-400 text-sm">
                       Nenhum dispositivo encontrado
                     </td>
                   </tr>

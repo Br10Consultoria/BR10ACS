@@ -31,6 +31,11 @@ export const devicesApi = {
     api.get(`/devices/${id}/diagnostics/history`, { params: { type, limit } }),
   stats: () => api.get('/devices/stats'),
   refresh: (id: string) => api.post(`/devices/${id}/refresh`),
+  delete: (id: string) => api.delete(`/devices/${id}`),
+  addTag: (id: string, tag: string) => api.post(`/devices/${id}/tags/${encodeURIComponent(tag)}`),
+  removeTag: (id: string, tag: string) => api.delete(`/devices/${id}/tags/${encodeURIComponent(tag)}`),
+  getTimeSeries: (id: string, from?: string, to?: string, limit = 200) =>
+    api.get(`/devices/${id}/timeseries`, { params: { from, to, limit } }),
 }
 
 // ── Logs ──────────────────────────────────────────────────────────────────────
@@ -83,6 +88,8 @@ export const presetsApi = {
     api.put(`/presets/provisions/${encodeURIComponent(name)}`, { script }),
   deleteProvision: (name: string) =>
     api.delete(`/presets/provisions/${encodeURIComponent(name)}`),
+  applyTemplate: (oui: string, productClass?: string) =>
+    api.post('/presets/apply-template', { oui, productClass }),
 }
 
 // ── Files ─────────────────────────────────────────────────────────────────────

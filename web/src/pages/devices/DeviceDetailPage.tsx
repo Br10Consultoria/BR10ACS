@@ -1,15 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, RefreshCw, Power, RotateCcw, Wifi,
-  Signal, Activity, Monitor, Code, Users, Search, Download
+  Signal, Activity, Monitor, Code, Users, Search, Download, Tag, X, Trash2
 } from 'lucide-react'
 import { devicesApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, Badge, LoadingScreen } from '@/components/ui'
 import { formatDistanceToNow, format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import toast from 'react-hot-toast'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Legend
+} from 'recharts'
 
 const TABS = [
   { id: 'info', label: 'Informações', icon: Monitor },
@@ -20,12 +24,24 @@ const TABS = [
   { id: 'raw', label: 'Parâmetros Brutos', icon: Code },
 ]
 
+// Formata bytes em unidade legível
+function formatBytes(bytes: number): string {
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${bytes} B`
+}
+
 export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('info')
   const [rawSearch, setRawSearch] = useState('')
   const [isPolling, setIsPolling] = useState(false)
   const [pollCountdown, setPollCountdown] = useState(0)
+  const [showTagEditor, setShowTagEditor] = useState(false)
+  const [tagInput, setTagInput] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qc = useQueryClient()
   const deviceId = decodeURIComponent(id || '')
@@ -40,6 +56,7 @@ export default function DeviceDetailPage() {
       remaining -= 5
       setPollCountdown(remaining)
       qc.invalidateQueries({ queryKey: ['device', deviceId] })
+      qc.invalidateQueries({ queryKey: ['device-timeseries', deviceId] })
       if (remaining <= 0) {
         clearInterval(pollRef.current!)
         pollRef.current = null
@@ -66,6 +83,12 @@ export default function DeviceDetailPage() {
     enabled: activeTab === 'raw',
   })
 
+  const { data: timeSeries } = useQuery({
+    queryKey: ['device-timeseries', deviceId],
+    queryFn: () => devicesApi.getTimeSeries(deviceId).then(r => r.data),
+    enabled: activeTab === 'signal',
+  })
+
   const rebootMutation = useMutation({
     mutationFn: () => devicesApi.reboot(deviceId),
     onSuccess: () => { toast.success('Reboot solicitado'); qc.invalidateQueries({ queryKey: ['device', deviceId] }) },
@@ -90,11 +113,40 @@ export default function DeviceDetailPage() {
     onError: () => toast.error('Falha ao forçar coleta'),
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: () => devicesApi.delete(deviceId),
+    onSuccess: () => {
+      toast.success('Dispositivo removido')
+      navigate('/devices')
+    },
+    onError: () => toast.error('Falha ao remover dispositivo'),
+  })
+
+  const addTagMutation = useMutation({
+    mutationFn: (tag: string) => devicesApi.addTag(deviceId, tag),
+    onSuccess: () => {
+      toast.success('Tag adicionada')
+      qc.invalidateQueries({ queryKey: ['device', deviceId] })
+      setTagInput('')
+    },
+    onError: () => toast.error('Falha ao adicionar tag'),
+  })
+
+  const removeTagMutation = useMutation({
+    mutationFn: (tag: string) => devicesApi.removeTag(deviceId, tag),
+    onSuccess: () => {
+      toast.success('Tag removida')
+      qc.invalidateQueries({ queryKey: ['device', deviceId] })
+    },
+    onError: () => toast.error('Falha ao remover tag'),
+  })
+
   if (isLoading) return <LoadingScreen />
   if (!device) return <div className="text-center py-12 text-slate-500">Dispositivo não encontrado</div>
 
   const online = device.online as boolean
   const d = device as Record<string, unknown>
+  const tags = (d.tags as string[]) || []
 
   // Extrai valor real de cada parâmetro (backend retorna {value, writable, type, timestamp})
   const extractRawValue = (v: unknown): string => {
@@ -133,6 +185,15 @@ export default function DeviceDetailPage() {
     }
   }
 
+  // Prepara dados do gráfico de sinal
+  const chartData = Array.isArray(timeSeries)
+    ? timeSeries.map((p: Record<string, unknown>) => ({
+        time: p.timestamp ? format(new Date(p.timestamp as string), 'HH:mm') : '',
+        rx: p.rxDbm != null ? Number(p.rxDbm) : null,
+        tx: p.txDbm != null ? Number(p.txDbm) : null,
+      })).reverse()
+    : []
+
   return (
     <div className="space-y-5">
       {/* Indicador de polling ativo */}
@@ -158,6 +219,23 @@ export default function DeviceDetailPage() {
         </div>
       )}
 
+      {/* Confirmação de exclusão */}
+      {showDeleteConfirm && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <Trash2 className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <span className="text-sm text-red-700 flex-1">Confirma a remoção do dispositivo <strong>{(d.serialNumber as string) || deviceId}</strong>? Esta ação não pode ser desfeita.</span>
+          <button
+            onClick={() => deleteMutation.mutate()}
+            disabled={deleteMutation.isPending}
+            className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+          >Remover</button>
+          <button
+            onClick={() => setShowDeleteConfirm(false)}
+            className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-100"
+          >Cancelar</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -165,16 +243,49 @@ export default function DeviceDetailPage() {
             <ArrowLeft className="w-4 h-4 text-slate-500" />
           </Link>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-bold text-slate-800 font-mono">
                 {(d.serialNumber as string) || deviceId.split('-').pop()}
               </h2>
               <Badge variant={online ? 'green' : 'red'}>
                 {online ? <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> Online</> : 'Offline'}
               </Badge>
+              {tags.map(tag => (
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-xs font-medium">
+                  {tag}
+                  <button onClick={() => removeTagMutation.mutate(tag)} className="hover:text-indigo-900">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <button
+                onClick={() => setShowTagEditor(!showTagEditor)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 border border-dashed border-slate-300 text-slate-400 rounded-full text-xs hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+              >
+                <Tag className="w-3 h-3" /> tag
+              </button>
             </div>
+            {showTagEditor && (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && tagInput.trim()) { addTagMutation.mutate(tagInput.trim()) } }}
+                  placeholder="Nova tag (Enter para adicionar)"
+                  className="px-2.5 py-1 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 w-52"
+                  autoFocus
+                />
+                <button
+                  onClick={() => { if (tagInput.trim()) addTagMutation.mutate(tagInput.trim()) }}
+                  disabled={!tagInput.trim() || addTagMutation.isPending}
+                  className="px-2.5 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >Adicionar</button>
+                <button onClick={() => setShowTagEditor(false)} className="text-xs text-slate-400 hover:text-slate-600">Fechar</button>
+              </div>
+            )}
             <p className="text-sm text-slate-500 mt-0.5">
-              {(d.manufacturer as string) || '—'} {(d.model as string) || '—'} · {(d.ip as string) || '—'}
+              {(d.manufacturer as string) || '—'} {(d.model as string) || '—'} · {(d.ipv4 as string) || (d.ip as string) || '—'}
             </p>
           </div>
         </div>
@@ -204,6 +315,13 @@ export default function DeviceDetailPage() {
           >
             <Power className="w-3.5 h-3.5" />
             Reboot
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            title="Remover dispositivo"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-slate-50 text-slate-500 border border-slate-200 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -272,25 +390,41 @@ export default function DeviceDetailPage() {
           <Card>
             <CardHeader><CardTitle>Tráfego</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {[
-                ['Download Total', d.wanBytesReceived ? `${((d.wanBytesReceived as number) / 1048576).toFixed(1)} MB` : null],
-                ['Upload Total', d.wanBytesSent ? `${((d.wanBytesSent as number) / 1048576).toFixed(1)} MB` : null],
-                ['Bytes Recebidos', d.wanBytesReceived],
-                ['Bytes Enviados', d.wanBytesSent],
-              ].map(([label, value]) => (
-                <div key={label as string} className="flex justify-between text-sm">
-                  <span className="text-slate-500">{label as string}</span>
-                  <span className="font-medium text-slate-700">{(value as string) || '—'}</span>
+              {/* Download */}
+              {d.wanBytesReceived != null && (
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-slate-500">Download Total</span>
+                    <span className="font-semibold text-blue-700">{formatBytes(d.wanBytesReceived as number)}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                    <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((d.wanBytesReceived as number) / 10_737_418_240) * 100)}%` }} />
+                  </div>
                 </div>
-              ))}
-              <div className="pt-2 border-t border-slate-100">
+              )}
+              {/* Upload */}
+              {d.wanBytesSent != null && (
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-slate-500">Upload Total</span>
+                    <span className="font-semibold text-emerald-700">{formatBytes(d.wanBytesSent as number)}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                    <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((d.wanBytesSent as number) / 10_737_418_240) * 100)}%` }} />
+                  </div>
+                </div>
+              )}
+              {d.wanBytesReceived == null && d.wanBytesSent == null && (
+                <p className="text-xs text-slate-400 text-center py-2">Dados de tráfego não disponíveis — faça Refresh para coletar</p>
+              )}
+              <div className="pt-2 border-t border-slate-100 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Último Inform</span>
                   <span className="text-xs text-slate-600">
                     {d.lastInform ? formatDistanceToNow(new Date(d.lastInform as string), { addSuffix: true, locale: ptBR }) : '—'}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm mt-2">
+                <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Registrado em</span>
                   <span className="text-xs text-slate-600">
                     {d.registered ? format(new Date(d.registered as string), 'dd/MM/yyyy HH:mm') : '—'}
@@ -303,49 +437,98 @@ export default function DeviceDetailPage() {
       )}
 
       {activeTab === 'signal' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card>
-            <CardHeader><CardTitle>Sinal Óptico (PON)</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              {[
-                { label: 'RX Power', value: d.rxPower, unit: 'dBm', good: [-27, -8] },
-                { label: 'TX Power', value: d.txPower, unit: 'dBm', good: [0, 5] },
-                { label: 'Temperatura', value: d.temperature, unit: '°C', good: [0, 70] },
-                { label: 'Tensão', value: d.voltage, unit: 'V', good: [3.1, 3.5] },
-              ].map(({ label, value, unit }) => (
-                <div key={label}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-500">{label}</span>
-                    <span className="font-bold text-slate-800">
-                      {value != null ? `${value} ${unit}` : '—'}
-                    </span>
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <Card>
+              <CardHeader><CardTitle>Sinal Óptico (PON)</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {[
+                  { label: 'RX Power', value: d.rxPower, unit: 'dBm', good: [-27, -8], color: 'text-blue-700' },
+                  { label: 'TX Power', value: d.txPower, unit: 'dBm', good: [0, 5], color: 'text-emerald-700' },
+                  { label: 'Temperatura', value: d.temperature, unit: '°C', good: [0, 70], color: 'text-orange-600' },
+                  { label: 'Tensão', value: d.voltage, unit: 'V', good: [3.1, 3.5], color: 'text-purple-700' },
+                ].map(({ label, value, unit, good, color }) => {
+                  const num = value != null ? Number(value) : null
+                  const inRange = num != null && num >= good[0] && num <= good[1]
+                  const outRange = num != null && (num < good[0] || num > good[1])
+                  return (
+                    <div key={label}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-slate-500">{label}</span>
+                        <span className={`font-bold ${outRange ? 'text-red-600' : inRange ? color : 'text-slate-400'}`}>
+                          {num != null ? `${num} ${unit}` : '—'}
+                          {outRange && <span className="ml-1 text-xs">⚠</span>}
+                        </span>
+                      </div>
+                      {num != null && (
+                        <div className="text-xs text-slate-400">
+                          Faixa ideal: {good[0]} a {good[1]} {unit}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Status do Link</span>
+                    <Badge variant={d.linkStatus === 'Up' ? 'green' : 'red'}>
+                      {(d.linkStatus as string) || '—'}
+                    </Badge>
                   </div>
                 </div>
-              ))}
-              <div className="pt-2 border-t border-slate-100">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Status do Link</span>
-                  <Badge variant={d.linkStatus === 'Up' ? 'green' : 'red'}>
-                    {(d.linkStatus as string) || '—'}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
+            <Card>
+              <CardHeader><CardTitle>Connection Request</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">URL</span>
+                  <span className="font-mono text-xs text-slate-600 break-all text-right max-w-[70%]">
+                    {(d.connectionRequestUrl as string) || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Usuário</span>
+                  <span className="font-mono text-xs">{(d.connectionRequestUsername as string) || '—'}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Gráfico histórico de sinal */}
           <Card>
-            <CardHeader><CardTitle>Connection Request</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">URL</span>
-                <span className="font-mono text-xs text-slate-600 break-all text-right max-w-[70%]">
-                  {(d.connectionRequestUrl as string) || '—'}
-                </span>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Histórico de Sinal (últimas 24h)</CardTitle>
+                <span className="text-xs text-slate-400">{chartData.length} pontos coletados</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Usuário</span>
-                <span className="font-mono text-xs">{(d.connectionRequestUsername as string) || '—'}</span>
-              </div>
+            </CardHeader>
+            <CardContent>
+              {chartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                  <Signal className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-sm">Nenhum dado histórico disponível</p>
+                  <p className="text-xs mt-1">O histórico é coletado automaticamente a cada ciclo do coletor</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} domain={['auto', 'auto']} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                      formatter={(value: number, name: string) => [`${value} dBm`, name === 'rx' ? 'RX Power' : 'TX Power']}
+                    />
+                    <Legend formatter={(v) => v === 'rx' ? 'RX Power' : 'TX Power'} />
+                    <ReferenceLine y={-27} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Min', fontSize: 10, fill: '#ef4444' }} />
+                    <ReferenceLine y={-8} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: 'Max', fontSize: 10, fill: '#f59e0b' }} />
+                    <Line type="monotone" dataKey="rx" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="tx" stroke="#10b981" strokeWidth={2} dot={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </div>

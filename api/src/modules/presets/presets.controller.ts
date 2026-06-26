@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Put, Delete, Body, Param,
+  Controller, Get, Put, Delete, Post, Body, Param,
   UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
@@ -33,6 +33,14 @@ export class PresetsController {
   @ApiOperation({ summary: 'Remover um preset' })
   async deletePreset(@Param('name') name: string) {
     return this.presetsService.deletePreset(name);
+  }
+
+  // ── Templates de coleta automática ───────────────────────────────────────────
+
+  @Post('apply-template')
+  @ApiOperation({ summary: 'Criar provisão + preset de coleta para um OUI/modelo' })
+  async applyTemplate(@Body() body: { oui: string; productClass?: string }) {
+    return this.presetsService.applyTemplate(body.oui, body.productClass);
   }
 
   // ── Provisions ───────────────────────────────────────────────────────────────
