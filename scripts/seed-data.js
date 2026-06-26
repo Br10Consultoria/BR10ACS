@@ -16,13 +16,10 @@
 
 'use strict';
 
-const { MongoClient } = require('mongodb');
-const path = require('path');
-const fs = require('fs');
+const mongoose = require('mongoose');
 
 // ─── Configuração ─────────────────────────────────────────────────────────────
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/br10';
-const DB_NAME = 'br10';
 const RESET = process.argv.includes('--reset');
 
 // ─── Dados de fabricantes e modelos (baseado nos packages do repositório) ─────
@@ -286,7 +283,8 @@ function log(msg) { console.log(`[BR10ACS Seed] ${msg}`); }
 function ok(msg)  { console.log(`  ✓ ${msg}`); }
 function warn(msg){ console.log(`  ⚠ ${msg}`); }
 
-async function upsertMany(collection, docs, keyField) {
+async function upsertMany(db, collectionName, docs, keyField) {
+  const collection = db.collection(collectionName);
   let inserted = 0, updated = 0;
   for (const doc of docs) {
     const filter = { [keyField]: doc[keyField] };
@@ -304,10 +302,12 @@ async function upsertMany(collection, docs, keyField) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   log('Conectando ao MongoDB...');
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  const db = client.db(DB_NAME);
-  log(`Conectado ao banco: ${DB_NAME}`);
+  await mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 10000,
+    connectTimeoutMS: 10000,
+  });
+  const db = mongoose.connection.db;
+  log('Conectado!');
 
   if (RESET) {
     warn('--reset ativado: limpando collections...');
@@ -324,14 +324,12 @@ async function main() {
 
   // ── 1. Fabricantes ──────────────────────────────────────────────────────────
   log('Importando fabricantes...');
-  const mfCol = db.collection('manufacturers');
-  const mfResult = await upsertMany(mfCol, MANUFACTURERS, 'oui');
+  const mfResult = await upsertMany(db, 'manufacturers', MANUFACTURERS, 'oui');
   ok(`Fabricantes: ${mfResult.inserted} inseridos, ${mfResult.updated} atualizados`);
 
   // ── 2. Modelos de dispositivos ──────────────────────────────────────────────
   log('Importando modelos de dispositivos...');
-  const mdCol = db.collection('device_models');
-  const mdResult = await upsertMany(mdCol, DEVICE_MODELS.map(m => ({
+  const mdResult = await upsertMany(db, 'device_models', DEVICE_MODELS.map(m => ({
     ...m,
     key: `${m.oui}|${m.model}`,
   })), 'key');
@@ -367,20 +365,17 @@ async function main() {
 
   // ── 4. Perfis de permissão ──────────────────────────────────────────────────
   log('Importando perfis de permissão...');
-  const rolesCol = db.collection('roles');
-  const rolesResult = await upsertMany(rolesCol, DEFAULT_ROLES, 'name');
+  const rolesResult = await upsertMany(db, 'roles', DEFAULT_ROLES, 'name');
   ok(`Roles: ${rolesResult.inserted} inseridas, ${rolesResult.updated} atualizadas`);
 
   // ── 5. Tags padrão ──────────────────────────────────────────────────────────
   log('Importando tags padrão...');
-  const tagsCol = db.collection('tags');
-  const tagsResult = await upsertMany(tagsCol, DEFAULT_TAGS, 'name');
+  const tagsResult = await upsertMany(db, 'tags', DEFAULT_TAGS, 'name');
   ok(`Tags: ${tagsResult.inserted} inseridas, ${tagsResult.updated} atualizadas`);
 
   // ── 6. AutoConfig padrão ────────────────────────────────────────────────────
   log('Importando AutoConfig padrão...');
-  const acCol = db.collection('autoconfigs');
-  const acResult = await upsertMany(acCol, DEFAULT_AUTOCONFIGS, 'name');
+  const acResult = await upsertMany(db, 'autoconfigs', DEFAULT_AUTOCONFIGS, 'name');
   ok(`AutoConfig: ${acResult.inserted} inseridas, ${acResult.updated} atualizadas`);
 
   // ── 7. Índices ───────────────────────────────────────────────────────────────
@@ -394,7 +389,7 @@ async function main() {
   await db.collection('autoconfigs').createIndex({ enabled: 1, priority: -1 });
   ok('Índices criados');
 
-  await client.close();
+  await mongoose.disconnect();
 
   console.log('');
   console.log('════════════════════════════════════════');
@@ -406,6 +401,7 @@ async function main() {
   console.log(`  Tags:          ${DEFAULT_TAGS.length}`);
   console.log(`  AutoConfigs:   ${DEFAULT_AUTOCONFIGS.length}`);
   console.log('');
+  process.exit(0);
 }
 
 main().catch(err => {
