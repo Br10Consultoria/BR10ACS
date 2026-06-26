@@ -1,78 +1,94 @@
 version: '3.9'
 
+# ─────────────────────────────────────────────────────────────────────────────
+# BR10ACS — docker-compose.yml
+#
+# Topologia no servidor bot-enter:
+#   - MongoDB: usa o container geniacs-mongodb-1 já existente (banco br10)
+#   - GenieACS NBI: acessa via rede geniacs_default (http://geniacs-genieacs-nbi-1:7557)
+#   - Redis: container próprio do BR10ACS
+#   - API: exposta na porta 8080 (mesma que o geniacs-api usava)
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
-  # ─── BR10ACS API ──────────────────────────────────────────────────────────
+  # ─── BR10ACS API ────────────────────────────────────────────────────────────
   br10acs-api:
     build:
       context: ./api
       dockerfile: Dockerfile
+    image: br10acs-api:latest
     container_name: br10acs-api
     restart: unless-stopped
     ports:
-      - "3100:3000"
+      - "8080:3000"
+    env_file:
+      - ./api/.env
     environment:
       NODE_ENV: production
       PORT: 3000
-      MONGODB_URI: mongodb://mongodb:27017/br10
-      REDIS_HOST: redis
+      # MongoDB: banco br10 no mesmo MongoDB do GenieACS
+      MONGODB_URI: mongodb://geniacs-mongodb-1:27017/br10
+      # Redis: container próprio
+      REDIS_HOST: br10acs-redis
       REDIS_PORT: 6379
-      GENIEACS_NBI_URL: ${GENIEACS_NBI_URL:-http://genieacs-nbi:7557}
-      GENIEACS_CWMP_URL: ${GENIEACS_CWMP_URL:-http://genieacs-cwmp:7547}
-      JWT_SECRET: ${JWT_SECRET:-br10acs_jwt_secret_change_in_production}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-br10acs_refresh_secret_change_in_production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-br10acs_enc_key_32chars_change_me}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3100}
-      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      # GenieACS NBI: acessado via rede interna Docker
+      GENIEACS_NBI_URL: http://geniacs-genieacs-nbi-1:7557
+      GENIEACS_CWMP_URL: http://geniacs-genieacs-cwmp-1:7547
     volumes:
       - br10acs_data:/app/data
     depends_on:
-      - mongodb
-      - redis
+      br10acs-redis:
+        condition: service_healthy
     networks:
-      - br10acs_net
-      - genieacs_net
+      - br10acs_internal
+      - geniacs_default        # acesso ao MongoDB e NBI do GenieACS
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/settings/public"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
-  # ─── MongoDB (banco br10 — separado do genieacs) ──────────────────────────
-  # Se já tiver MongoDB rodando com o GenieACS, remova este serviço
-  # e aponte MONGODB_URI para o MongoDB existente
-  mongodb:
-    image: mongo:7
-    container_name: br10acs-mongodb
-    restart: unless-stopped
-    ports:
-      - "27018:27017"
-    volumes:
-      - br10acs_mongodb:/data/db
-    networks:
-      - br10acs_net
-    command: mongod --quiet
-
-  # ─── Redis ────────────────────────────────────────────────────────────────
-  redis:
+  # ─── Redis (exclusivo do BR10ACS) ───────────────────────────────────────────
+  br10acs-redis:
     image: redis:7-alpine
     container_name: br10acs-redis
     restart: unless-stopped
-    ports:
-      - "6380:6379"
     volumes:
       - br10acs_redis:/data
     networks:
-      - br10acs_net
-    command: redis-server --appendonly yes
+      - br10acs_internal
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   br10acs_data:
-  br10acs_mongodb:
+    driver: local
   br10acs_redis:
+    driver: local
 
 networks:
-  br10acs_net:
+  # Rede interna exclusiva do BR10ACS
+  br10acs_internal:
     driver: bridge
-  genieacs_net:
+    name: br10acs_internal
+
+  # Rede externa do GENIACS — já existe no servidor
+  # Permite acesso ao geniacs-mongodb-1 e geniacs-genieacs-nbi-1
+  geniacs_default:
     external: true
-    name: ${GENIEACS_NETWORK:-genieacs_default}
+    name: geniacs_default

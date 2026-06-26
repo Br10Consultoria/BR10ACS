@@ -23,6 +23,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { ApiClientsModule } from './modules/api-clients/api-clients.module';
 import { WebsocketModule } from './modules/websocket/websocket.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -68,5 +69,6 @@ import { WebsocketModule } from './modules/websocket/websocket.module';
     ApiClientsModule,
     WebsocketModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}
