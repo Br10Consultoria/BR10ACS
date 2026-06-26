@@ -36,7 +36,7 @@ export class MassOp {
   success: number;
 
   @Prop({ default: 0 })
-  errors: number;
+  errorCount: number;
 
   @Prop({ type: [Object], default: [] })
   errorDetails: { deviceId: string; error: string }[];

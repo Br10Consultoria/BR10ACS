@@ -73,8 +73,6 @@ export class User {
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-// Índices
-UserSchema.index({ username: 1 });
-UserSchema.index({ email: 1 });
+// Índices adicionais (username e email já têm unique:true no @Prop)
 UserSchema.index({ role: 1 });
 UserSchema.index({ status: 1 });

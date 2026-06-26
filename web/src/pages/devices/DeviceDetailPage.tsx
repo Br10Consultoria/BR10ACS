@@ -135,10 +135,10 @@ export default function DeviceDetailPage() {
                 ['Serial', d.serialNumber],
                 ['Fabricante', d.manufacturer],
                 ['Modelo', d.model],
-                ['Firmware', d.firmware],
-                ['Hardware', d.hardware],
+                ['Firmware', d.softwareVersion],
+                ['Hardware', d.hardwareVersion],
                 ['OUI', d.oui],
-                ['Uptime', d.uptime],
+                ['Uptime', d.uptime ? `${Math.floor((d.uptime as number) / 3600)}h ${Math.floor(((d.uptime as number) % 3600) / 60)}m` : null],
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between text-sm">
                   <span className="text-slate-500">{label as string}</span>
@@ -152,13 +152,13 @@ export default function DeviceDetailPage() {
             <CardHeader><CardTitle>Conexão PPPoE</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {[
-                ['Usuário PPPoE', d.pppoeUser],
-                ['IPv4', d.ip],
+                ['Usuário PPPoE', d.pppLogin],
+                ['IPv4', d.ipv4],
                 ['IPv6', d.ipv6],
-                ['Gateway', d.gateway],
-                ['DNS Primário', (d.dns as Record<string, string>)?.primary],
-                ['DNS Secundário', (d.dns as Record<string, string>)?.secondary],
-                ['VLAN ID', d.vlanId],
+                ['Gateway', d.pppGateway],
+                ['DNS', d.pppDNSServers],
+                ['Status PPPoE', d.pppConnectionStatus],
+                ['MAC WAN', d.pppMACAddress],
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between text-sm">
                   <span className="text-slate-500">{label as string}</span>
@@ -172,10 +172,10 @@ export default function DeviceDetailPage() {
             <CardHeader><CardTitle>Tráfego</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {[
-                ['Download Total', d.totalDownloadMB ? `${(d.totalDownloadMB as number).toFixed(1)} MB` : '—'],
-                ['Upload Total', d.totalUploadMB ? `${(d.totalUploadMB as number).toFixed(1)} MB` : '—'],
-                ['Bytes Recebidos', d.totalBytesReceived],
-                ['Bytes Enviados', d.totalBytesSent],
+                ['Download Total', d.wanBytesReceived ? `${((d.wanBytesReceived as number) / 1048576).toFixed(1)} MB` : null],
+                ['Upload Total', d.wanBytesSent ? `${((d.wanBytesSent as number) / 1048576).toFixed(1)} MB` : null],
+                ['Bytes Recebidos', d.wanBytesReceived],
+                ['Bytes Enviados', d.wanBytesSent],
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between text-sm">
                   <span className="text-slate-500">{label as string}</span>
@@ -207,8 +207,8 @@ export default function DeviceDetailPage() {
             <CardHeader><CardTitle>Sinal Óptico (PON)</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {[
-                { label: 'RX Power', value: d.rxDbm, unit: 'dBm', good: [-27, -8] },
-                { label: 'TX Power', value: d.txDbm, unit: 'dBm', good: [0, 5] },
+                { label: 'RX Power', value: d.rxPower, unit: 'dBm', good: [-27, -8] },
+                { label: 'TX Power', value: d.txPower, unit: 'dBm', good: [0, 5] },
                 { label: 'Temperatura', value: d.temperature, unit: '°C', good: [0, 70] },
                 { label: 'Tensão', value: d.voltage, unit: 'V', good: [3.1, 3.5] },
               ].map(({ label, value, unit }) => (
@@ -238,7 +238,7 @@ export default function DeviceDetailPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">URL</span>
                 <span className="font-mono text-xs text-slate-600 break-all text-right max-w-[70%]">
-                  {(d.connectionRequestURL as string) || '—'}
+                  {(d.connectionRequestUrl as string) || '—'}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
@@ -274,7 +274,7 @@ export default function DeviceDetailPage() {
                     </div>
                     <div className="flex justify-between">
                       <span>Dispositivos</span>
-                      <span>{(net.associatedDevices as number) || 0}</span>
+                      <span>{(net.associated as number) ?? 0}</span>
                     </div>
                   </div>
                 </div>

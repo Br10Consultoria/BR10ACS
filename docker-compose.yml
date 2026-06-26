@@ -1,5 +1,3 @@
-version: '3.9'
-
 # ─────────────────────────────────────────────────────────────────────────────
 # BR10ACS — docker-compose.yml
 #
@@ -26,6 +24,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      TZ: America/Bahia
       # MongoDB: banco br10 no mesmo MongoDB do GenieACS
       MONGODB_URI: mongodb://geniacs-mongodb-1:27017/br10
       # Redis: container próprio (rede interna)

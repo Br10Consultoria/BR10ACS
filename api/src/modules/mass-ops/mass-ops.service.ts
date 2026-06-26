@@ -25,7 +25,7 @@ export class MassOpsService {
   }
 
   async create(data: Partial<MassOp>, userId: string): Promise<MassOpDocument> {
-    const payload: any = { ...data, createdBy: userId, status: 'pending', errors: 0, success: 0, processed: 0, total: 0, errorDetails: [] };
+    const payload: any = { ...data, createdBy: userId, status: 'pending', errorCount: 0, success: 0, processed: 0, total: 0, errorDetails: [] };
     const op = await this.massOpModel.create(payload);
     // Executar de forma assíncrona
     this.execute((op as any)._id.toString()).catch((err: any) =>
@@ -82,7 +82,7 @@ export class MassOpsService {
 
         await this.massOpModel.findByIdAndUpdate(opId, {
           $inc: { processed: 1 },
-          $set: { success, errors, errorDetails },
+          $set: { success, errorCount: errors, errorDetails },
         });
 
         // Throttle: 200ms entre cada dispositivo
@@ -93,7 +93,7 @@ export class MassOpsService {
         $set: { status: 'completed', finishedAt: new Date() },
       });
 
-      this.logger.log(`Operação ${opId} concluída: ${success} sucesso, ${errors} erros`);
+      this.logger.log(`Operação ${opId} concluída: ${success} sucesso, ${errors} erros`); // errorCount no DB
     } catch (err) {
       await this.massOpModel.findByIdAndUpdate(opId, {
         $set: { status: 'failed', finishedAt: new Date() },

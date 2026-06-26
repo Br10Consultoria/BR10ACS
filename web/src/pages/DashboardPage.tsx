@@ -28,7 +28,7 @@ export default function DashboardPage() {
     refetchInterval: 30000,
   })
 
-  const devices = devicesData?.devices || devicesData || []
+  const devices = devicesData?.data || devicesData?.devices || devicesData || []
 
   // Dados simulados para o gráfico de tendência (substituir por TimeSeries real)
   const trendData = Array.from({ length: 12 }, (_, i) => ({
@@ -172,7 +172,7 @@ export default function DashboardPage() {
                       </Link>
                     </Td>
                     <Td className="text-slate-500">{(d.model as string) || '—'}</Td>
-                    <Td className="font-mono text-xs">{(d.ip as string) || '—'}</Td>
+                    <Td className="font-mono text-xs">{(d.ipv4 as string) || '—'}</Td>
                     <Td>
                       <div className="flex items-center gap-1.5 text-slate-500">
                         <Clock className="w-3 h-3" />

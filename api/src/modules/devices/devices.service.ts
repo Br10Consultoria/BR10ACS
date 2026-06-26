@@ -191,7 +191,8 @@ export class DevicesService {
     total: number;
     online: number;
     offline: number;
-    manufacturers: Record<string, number>;
+    informedToday: number;
+    byManufacturer: { manufacturer: string; count: number }[];
   }> {
     const devices = await this.genieAcsService.getDevices({}, [
       '_id',
@@ -201,18 +202,26 @@ export class DevicesService {
 
     const normalized = devices.map((d) => DeviceNormalizer.normalize(d));
     const online = normalized.filter((d) => d.online).length;
-    const manufacturers: Record<string, number> = {};
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const informedToday = normalized.filter(
+      (d) => d.lastInform && new Date(d.lastInform) > oneDayAgo,
+    ).length;
 
+    const mfMap: Record<string, number> = {};
     for (const d of normalized) {
       const m = d.manufacturer || 'Desconhecido';
-      manufacturers[m] = (manufacturers[m] || 0) + 1;
+      mfMap[m] = (mfMap[m] || 0) + 1;
     }
+    const byManufacturer = Object.entries(mfMap)
+      .map(([manufacturer, count]) => ({ manufacturer, count }))
+      .sort((a, b) => b.count - a.count);
 
     return {
       total: normalized.length,
       online,
       offline: normalized.length - online,
-      manufacturers,
+      informedToday,
+      byManufacturer,
     };
   }
 

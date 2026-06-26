@@ -25,7 +25,7 @@ export const devicesApi = {
     api.get(`/devices/${id}/timeseries`, { params: { metric, hours } }),
   diagnostics: (id: string, type: string, params?: Record<string, unknown>) =>
     api.post(`/devices/${id}/diagnostics/${type}`, params),
-  stats: () => api.get('/devices/stats/summary'),
+  stats: () => api.get('/devices/stats'),
 }
 
 // ── Logs ──────────────────────────────────────────────────────────────────────

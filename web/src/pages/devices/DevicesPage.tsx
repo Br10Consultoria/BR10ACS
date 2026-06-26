@@ -24,7 +24,7 @@ export default function DevicesPage() {
     refetchInterval: 30000,
   })
 
-  const devices: Record<string, unknown>[] = data?.devices || data || []
+  const devices: Record<string, unknown>[] = data?.data || data?.devices || data || []
   const total: number = data?.total || devices.length
 
   return (
@@ -99,7 +99,7 @@ export default function DevicesPage() {
                   const serial = (d.serialNumber || id?.split('-').pop()) as string || '—'
                   const online = d.online as boolean
                   const lastInform = d.lastInform as string
-                  const hosts = d.connectedHosts as number || 0
+                  const hosts = ((d.hosts as unknown[]) || []).length
                   return (
                     <tr key={id} className="hover:bg-slate-50 transition-colors cursor-pointer">
                       <Td>
@@ -126,8 +126,8 @@ export default function DevicesPage() {
                           <div className="text-xs text-slate-400">{(d.model as string) || '—'}</div>
                         </div>
                       </Td>
-                      <Td className="font-mono text-xs text-slate-500">{(d.firmware as string) || '—'}</Td>
-                      <Td className="font-mono text-xs">{(d.ip as string) || '—'}</Td>
+                      <Td className="font-mono text-xs text-slate-500">{(d.softwareVersion as string) || '—'}</Td>
+                      <Td className="font-mono text-xs">{(d.ipv4 as string) || '—'}</Td>
                       <Td>
                         {hosts > 0 ? (
                           <Badge variant="blue">{hosts} host{hosts !== 1 ? 's' : ''}</Badge>
