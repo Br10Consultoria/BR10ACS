@@ -49,6 +49,9 @@ COPY --from=api-builder /app/tsconfig.json ./
 # Frontend compilado (servido pelo ServeStaticModule)
 COPY --from=web-builder /web/dist ./web/dist
 
+# Scripts utilitários (seed, migrations)
+COPY scripts ./scripts
+
 # Diretório de dados persistentes
 RUN mkdir -p /app/data
 
