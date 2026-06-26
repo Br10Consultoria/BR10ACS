@@ -22,12 +22,6 @@ interface Alert {
   createdAt: string
 }
 
-const SEVERITY_COLORS: Record<AlertSeverity, string> = {
-  critical: 'bg-red-100 text-red-700 border-red-200',
-  warning: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  info: 'bg-green-100 text-green-700 border-green-200',
-}
-
 const SEVERITY_BADGE: Record<AlertSeverity, string> = {
   critical: 'bg-red-500 text-white',
   warning: 'bg-yellow-500 text-white',
