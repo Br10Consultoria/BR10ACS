@@ -14,8 +14,8 @@ export function CardHeader({ children, className = '' }: { children: ReactNode; 
   return <div className={`px-5 py-4 border-b border-slate-100 ${className}`}>{children}</div>
 }
 
-export function CardTitle({ children }: { children: ReactNode }) {
-  return <h3 className="text-sm font-semibold text-slate-700">{children}</h3>
+export function CardTitle({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <h3 className={`text-sm font-semibold text-slate-700 ${className}`}>{children}</h3>
 }
 
 export function CardContent({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -100,7 +100,7 @@ export function Table({ children }: { children: ReactNode }) {
   )
 }
 
-export function Th({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function Th({ children, className = '' }: { children?: ReactNode; className?: string }) {
   return (
     <th className={`px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50 border-b border-slate-200 ${className}`}>
       {children}
@@ -108,7 +108,7 @@ export function Th({ children, className = '' }: { children: ReactNode; classNam
   )
 }
 
-export function Td({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function Td({ children, className = '' }: { children?: ReactNode; className?: string }) {
   return (
     <td className={`px-4 py-3 text-slate-700 border-b border-slate-100 ${className}`}>
       {children}

@@ -519,7 +519,7 @@ export default function DeviceDetailPage() {
                     <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} domain={['auto', 'auto']} />
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-                      formatter={(value: number, name: string) => [`${value} dBm`, name === 'rx' ? 'RX Power' : 'TX Power']}
+                      formatter={(value, name) => [value != null ? `${Number(value).toFixed(2)} dBm` : '—', name === 'rx' ? 'RX Power' : 'TX Power']}
                     />
                     <Legend formatter={(v) => v === 'rx' ? 'RX Power' : 'TX Power'} />
                     <ReferenceLine y={-27} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Min', fontSize: 10, fill: '#ef4444' }} />
