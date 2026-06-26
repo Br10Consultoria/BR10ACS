@@ -27,7 +27,7 @@ export class FilesController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string; size: number },
     @Query('fileType') fileType = '1 Firmware Upgrade Image',
   ) {
     if (!file) throw new BadRequestException('Arquivo não enviado');
