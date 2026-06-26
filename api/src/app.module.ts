@@ -57,7 +57,7 @@ import { HealthController } from './health.controller';
 
     // Frontend estático (React build)
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', 'web', 'dist'),
+      rootPath: join(__dirname, '..', 'web', 'dist'),
       exclude: ['/api/*path'],
       serveStaticOptions: {
         index: 'index.html',

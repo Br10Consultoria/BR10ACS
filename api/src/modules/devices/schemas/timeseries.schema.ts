@@ -7,19 +7,23 @@ export type TimeSeriesDocument = TimeSeries & Document;
   collection: 'timeseries',
   timestamps: false,
   versionKey: false,
+  strict: false,
 })
 export class TimeSeries {
   @Prop({ required: true, index: true })
-  serialNumber: string;
+  deviceId: string;
 
   @Prop({ required: true, index: true })
-  date: Date;
+  timestamp: Date;
+
+  @Prop({ type: Boolean, default: false })
+  online: boolean;
 
   @Prop({ type: Number, default: null })
-  rx: number | null;
+  rxDbm: number | null;
 
   @Prop({ type: Number, default: null })
-  tx: number | null;
+  txDbm: number | null;
 
   @Prop({ type: Number, default: null })
   temperature: number | null;
@@ -27,31 +31,32 @@ export class TimeSeries {
   @Prop({ type: Number, default: null })
   voltage: number | null;
 
-  @Prop({ type: Object, default: {} })
-  connectedHosts: {
-    '5ghz': number;
-    '2ghz': number;
-    ethernet: number;
-    total: number;
-  };
+  @Prop({ type: Number, default: null })
+  totalBytesReceived: number | null;
 
   @Prop({ type: Number, default: null })
-  wifiScore: number | null;
+  totalBytesSent: number | null;
+
+  @Prop({ type: Number, default: null })
+  totalDownloadMB: number | null;
+
+  @Prop({ type: Number, default: null })
+  totalUploadMB: number | null;
 
   @Prop({ type: Number, default: 0 })
-  wanDownload: number;
+  totalAssociated: number;
 
   @Prop({ type: Number, default: 0 })
-  wanUpload: number;
+  hostsCount: number;
 
-  @Prop({ type: Number, default: null })
-  cpuUsage: number | null;
+  @Prop({ type: String, default: null })
+  uptime: string | null;
 
-  @Prop({ type: Number, default: null })
-  memoryFree: number | null;
+  @Prop({ type: String, default: null })
+  linkStatus: string | null;
 }
 
 export const TimeSeriesSchema = SchemaFactory.createForClass(TimeSeries);
 
-TimeSeriesSchema.index({ serialNumber: 1, date: -1 });
-TimeSeriesSchema.index({ date: -1 });
+TimeSeriesSchema.index({ deviceId: 1, timestamp: -1 }, { unique: true });
+TimeSeriesSchema.index({ timestamp: -1 });
