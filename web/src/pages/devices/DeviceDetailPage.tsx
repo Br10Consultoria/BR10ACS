@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, RefreshCw, Power, RotateCcw, Wifi,
-  Signal, Activity, Monitor, Code, Users, Search
+  Signal, Activity, Monitor, Code, Users, Search, Download
 } from 'lucide-react'
 import { devicesApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, Badge, LoadingScreen } from '@/components/ui'
@@ -58,12 +58,42 @@ export default function DeviceDetailPage() {
   const online = device.online as boolean
   const d = device as Record<string, unknown>
 
-  const filteredRaw = rawParams
-    ? Object.entries(rawParams as Record<string, unknown>).filter(([k, v]) =>
-        !rawSearch || k.toLowerCase().includes(rawSearch.toLowerCase()) ||
-        String(v).toLowerCase().includes(rawSearch.toLowerCase())
-      )
+  // Extrai valor real de cada parâmetro (backend retorna {value, writable, type, timestamp})
+  const extractRawValue = (v: unknown): string => {
+    if (v === null || v === undefined) return '—'
+    if (typeof v === 'object' && v !== null && 'value' in v) {
+      const val = (v as Record<string, unknown>).value
+      return val === null || val === undefined ? '—' : String(val)
+    }
+    return String(v)
+  }
+
+  const allRawEntries = rawParams
+    ? Object.entries(rawParams as Record<string, unknown>)
     : []
+
+  const filteredRaw = allRawEntries.filter(([k, v]) => {
+    const strVal = extractRawValue(v)
+    return !rawSearch ||
+      k.toLowerCase().includes(rawSearch.toLowerCase()) ||
+      strVal.toLowerCase().includes(rawSearch.toLowerCase())
+  })
+
+  const downloadRawParams = (fmt: 'csv' | 'json') => {
+    const serial = (d.serialNumber as string) || deviceId.split('-').pop() || 'device'
+    if (fmt === 'json') {
+      const obj: Record<string, string> = {}
+      allRawEntries.forEach(([k, v]) => { obj[k] = extractRawValue(v) })
+      const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = `${serial}_params.json`; a.click(); URL.revokeObjectURL(url)
+    } else {
+      const rows = ['Parâmetro,Valor', ...allRawEntries.map(([k, v]) => `${k},"${extractRawValue(v).replace(/"/g, '""')}"`)]
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = `${serial}_params.csv`; a.click(); URL.revokeObjectURL(url)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -324,17 +354,33 @@ export default function DeviceDetailPage() {
       {activeTab === 'raw' && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Parâmetros TR-069 Brutos</CardTitle>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Filtrar parâmetros..."
-                  value={rawSearch}
-                  onChange={(e) => setRawSearch(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
-                />
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <CardTitle>Parâmetros TR-069 Brutos <span className="text-xs font-normal text-slate-400">({allRawEntries.length} parâmetros)</span></CardTitle>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Filtrar parâmetros..."
+                    value={rawSearch}
+                    onChange={(e) => setRawSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
+                  />
+                </div>
+                <button
+                  onClick={() => downloadRawParams('csv')}
+                  title="Download CSV"
+                  className="flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> CSV
+                </button>
+                <button
+                  onClick={() => downloadRawParams('json')}
+                  title="Download JSON"
+                  className="flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> JSON
+                </button>
               </div>
             </div>
           </CardHeader>
@@ -351,12 +397,22 @@ export default function DeviceDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRaw.map(([key, value]) => (
-                      <tr key={key} className="hover:bg-slate-50 border-b border-slate-100">
-                        <td className="px-4 py-2 font-mono text-slate-600 break-all">{key}</td>
-                        <td className="px-4 py-2 text-slate-700 break-all">{String(value ?? '—')}</td>
-                      </tr>
-                    ))}
+                    {filteredRaw.map(([key, value]) => {
+                      const rawEntry = typeof value === 'object' && value !== null && 'value' in value
+                        ? (value as Record<string, unknown>)
+                        : null
+                      const displayVal = extractRawValue(value)
+                      const writable = rawEntry?.writable as boolean | undefined
+                      return (
+                        <tr key={key} className="hover:bg-slate-50 border-b border-slate-100">
+                          <td className="px-4 py-2 font-mono text-slate-600 break-all">
+                            {key}
+                            {writable === false && <span className="ml-1.5 text-[10px] text-slate-400">(R)</span>}
+                          </td>
+                          <td className="px-4 py-2 text-slate-700 break-all">{displayVal}</td>
+                        </tr>
+                      )
+                    })}
                     {filteredRaw.length === 0 && (
                       <tr>
                         <td colSpan={2} className="px-4 py-8 text-center text-slate-400">
@@ -376,51 +432,167 @@ export default function DeviceDetailPage() {
 }
 
 // ── Diagnostics Tab ───────────────────────────────────────────────────────────
-function DiagnosticsTab({ deviceId }: { deviceId: string }) {
-  const [pingHost, setPingHost] = useState('8.8.8.8')
-  const [pingResult, setPingResult] = useState<Record<string, unknown> | null>(null)
-  const [pingLoading, setPingLoading] = useState(false)
+type DiagResult = Record<string, unknown> | null
 
-  const runPing = async () => {
-    setPingLoading(true)
+function useDiagnostic(deviceId: string, type: 'ping' | 'traceroute' | 'speedtest') {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<DiagResult>(null)
+  const [status, setStatus] = useState<string>('')
+  const [pollTimer, setPollTimer] = useState<ReturnType<typeof setInterval> | null>(null)
+
+  const stopPoll = (timer: ReturnType<typeof setInterval> | null) => {
+    if (timer) clearInterval(timer)
+  }
+
+  const run = async (params: Record<string, unknown>) => {
+    setLoading(true)
+    setResult(null)
+    setStatus('Enviando comando...')
+    setPollTimer(prev => { stopPoll(prev); return null })
     try {
-      const { data } = await devicesApi.diagnostics(deviceId, 'ping', { host: pingHost })
-      setPingResult(data)
+      await devicesApi.diagnostics(deviceId, type, params)
+      setStatus('Aguardando resultado do dispositivo...')
+      let attempts = 0
+      const interval = setInterval(async () => {
+        attempts++
+        try {
+          const { data } = await devicesApi.diagnosticsResult(deviceId, type)
+          const state = String(data?.state || '')
+          if (data && state && state !== 'Requested' && state !== 'None' && state !== '') {
+            setResult(data)
+            setStatus('')
+            setLoading(false)
+            clearInterval(interval)
+            setPollTimer(null)
+          } else if (attempts >= 20) {
+            setStatus('Timeout: dispositivo nao respondeu')
+            setLoading(false)
+            clearInterval(interval)
+            setPollTimer(null)
+          }
+        } catch {
+          if (attempts >= 20) {
+            setStatus('Erro ao obter resultado')
+            setLoading(false)
+            clearInterval(interval)
+          }
+        }
+      }, 3000)
+      setPollTimer(interval)
     } catch {
-      toast.error('Falha ao executar ping')
-    } finally {
-      setPingLoading(false)
+      toast.error(`Falha ao iniciar ${type}`)
+      setStatus('')
+      setLoading(false)
     }
   }
 
+  return { loading, result, status, run }
+}
+
+function ResultBox({ result, type }: { result: DiagResult; type: string }) {
+  if (!result) return null
+  if (type === 'traceroute') {
+    const hops = (result.hops as Record<string, unknown>[]) || []
+    return (
+      <div className="bg-slate-900 rounded-lg p-4 font-mono text-xs text-green-400 space-y-1 overflow-x-auto">
+        <div><span className="text-slate-400">host:</span> {String(result.host || '—')}</div>
+        <div><span className="text-slate-400">state:</span> {String(result.state || '—')}</div>
+        {hops.length > 0 && (
+          <div className="mt-2">
+            <div className="text-slate-400 mb-1">Hops:</div>
+            {hops.map((h, i) => (
+              <div key={i}>{String(h.hopIndex ?? i + 1).padStart(2, ' ')}. {String(h.hostAddress || h.host || '*')} {h.rttTimes ? `(${h.rttTimes}ms)` : ''}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+  if (type === 'speedtest') {
+    const start = result.startTime ? new Date(result.startTime as string).getTime() : null
+    const end = result.endTime ? new Date(result.endTime as string).getTime() : null
+    const durationMs = start && end ? end - start : null
+    const bytes = Number(result.testBytes || result.totalBytes || 0)
+    const mbps = durationMs && bytes ? ((bytes * 8) / (durationMs / 1000) / 1_000_000).toFixed(2) : null
+    return (
+      <div className="bg-slate-900 rounded-lg p-4 font-mono text-xs text-green-400 space-y-1">
+        <div><span className="text-slate-400">state:</span> {String(result.state || '—')}</div>
+        <div><span className="text-slate-400">url:</span> {String(result.url || '—')}</div>
+        <div><span className="text-slate-400">bytes recebidos:</span> {bytes ? `${(bytes / 1024 / 1024).toFixed(2)} MB` : '—'}</div>
+        {durationMs && <div><span className="text-slate-400">duração:</span> {(durationMs / 1000).toFixed(1)}s</div>}
+        {mbps && <div className="text-yellow-400"><span className="text-slate-400">velocidade:</span> {mbps} Mbps</div>}
+      </div>
+    )
+  }
+  return (
+    <div className="bg-slate-900 rounded-lg p-4 font-mono text-xs text-green-400 space-y-1">
+      {Object.entries(result).map(([k, v]) => (
+        <div key={k}><span className="text-slate-400">{k}:</span> {Array.isArray(v) ? JSON.stringify(v) : String(v ?? '—')}</div>
+      ))}
+    </div>
+  )
+}
+
+function DiagnosticsTab({ deviceId }: { deviceId: string }) {
+  const [pingHost, setPingHost] = useState('8.8.8.8')
+  const [traceHost, setTraceHost] = useState('8.8.8.8')
+  const [speedUrl, setSpeedUrl] = useState('http://speedtest.tele2.net/1MB.zip')
+
+  const ping = useDiagnostic(deviceId, 'ping')
+  const traceroute = useDiagnostic(deviceId, 'traceroute')
+  const speedtest = useDiagnostic(deviceId, 'speedtest')
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* Ping */}
       <Card>
         <CardHeader><CardTitle>Ping</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={pingHost}
-              onChange={(e) => setPingHost(e.target.value)}
-              placeholder="Host ou IP"
-              className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={runPing}
-              disabled={pingLoading}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {pingLoading ? <RotateCcw className="w-4 h-4 animate-spin" /> : 'Ping'}
+            <input type="text" value={pingHost} onChange={(e) => setPingHost(e.target.value)}
+              placeholder="Host ou IP" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button onClick={() => ping.run({ host: pingHost })} disabled={ping.loading}
+              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {ping.loading ? <RotateCcw className="w-4 h-4 animate-spin" /> : 'Ping'}
             </button>
           </div>
-          {pingResult && (
-            <div className="bg-slate-900 rounded-lg p-4 font-mono text-xs text-green-400 space-y-1">
-              {Object.entries(pingResult).map(([k, v]) => (
-                <div key={k}><span className="text-slate-400">{k}:</span> {String(v)}</div>
-              ))}
-            </div>
-          )}
+          {ping.status && <p className="text-xs text-slate-400 animate-pulse">{ping.status}</p>}
+          <ResultBox result={ping.result} type="ping" />
+        </CardContent>
+      </Card>
+
+      {/* Traceroute */}
+      <Card>
+        <CardHeader><CardTitle>Traceroute</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <input type="text" value={traceHost} onChange={(e) => setTraceHost(e.target.value)}
+              placeholder="Host ou IP" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button onClick={() => traceroute.run({ host: traceHost })} disabled={traceroute.loading}
+              className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors">
+              {traceroute.loading ? <RotateCcw className="w-4 h-4 animate-spin" /> : 'Trace'}
+            </button>
+          </div>
+          {traceroute.status && <p className="text-xs text-slate-400 animate-pulse">{traceroute.status}</p>}
+          <ResultBox result={traceroute.result} type="traceroute" />
+        </CardContent>
+      </Card>
+
+      {/* Speed Test */}
+      <Card className="lg:col-span-2">
+        <CardHeader><CardTitle>Teste de Velocidade (Download TR-069)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-slate-500">O dispositivo fará o download do arquivo informado e reportará a velocidade via TR-069 DownloadDiagnostics.</p>
+          <div className="flex gap-2">
+            <input type="text" value={speedUrl} onChange={(e) => setSpeedUrl(e.target.value)}
+              placeholder="URL do arquivo de teste" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button onClick={() => speedtest.run({ url: speedUrl })} disabled={speedtest.loading}
+              className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
+              {speedtest.loading ? <RotateCcw className="w-4 h-4 animate-spin" /> : 'Iniciar'}
+            </button>
+          </div>
+          {speedtest.status && <p className="text-xs text-slate-400 animate-pulse">{speedtest.status}</p>}
+          <ResultBox result={speedtest.result} type="speedtest" />
         </CardContent>
       </Card>
     </div>

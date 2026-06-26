@@ -61,15 +61,33 @@ export class CollectorService implements OnModuleDestroy {
       // Busca todos os dispositivos online do GenieACS via NBI
       const devices = await this.genieAcs.getDevices({}, [
         '_id', 'DeviceID', 'Events',
-          'InternetGatewayDevice.WANDevice',
-          'InternetGatewayDevice.LANDevice',
-          'InternetGatewayDevice.DeviceInfo.UpTime',
-          'Device.DeviceInfo.UpTime',
-          'InternetGatewayDevice.WANDevice.1.X_HW_GponInterfaceConfig',
-          'InternetGatewayDevice.WANDevice.1.X_ZTE_GponInterfaceConfig',
-          'InternetGatewayDevice.WANDevice.1.X_ALCL_GponInterfaceConfig',
-          'InternetGatewayDevice.WANDevice.1.X_ITBS_PONInterfaceConfig',
-          'InternetGatewayDevice.WANDevice.1.X_FH_GponInterfaceConfig',
+        // WAN completo (PPPoE, IP, Stats, tráfego)
+        'InternetGatewayDevice.WANDevice',
+        // LAN (hosts, Wi-Fi)
+        'InternetGatewayDevice.LANDevice',
+        // DeviceInfo completo (uptime, memória, CPU, versões)
+        'InternetGatewayDevice.DeviceInfo',
+        'Device.DeviceInfo',
+        // ManagementServer (URL, ConnectionRequest, PeriodicInform)
+        'InternetGatewayDevice.ManagementServer',
+        'Device.ManagementServer',
+        // Sinal óptico — Intelbras
+        'InternetGatewayDevice.WANDevice.1.X_ITBS_ORG_GponInterfaceConfig',
+        'InternetGatewayDevice.X_ITBS_ORG_GponInterfaceConfig',
+        // Sinal óptico — Huawei
+        'InternetGatewayDevice.WANDevice.1.X_HW_GponInterfaceConfig',
+        'InternetGatewayDevice.X_HW_GponInterfaceConfig',
+        // Sinal óptico — ZTE
+        'InternetGatewayDevice.WANDevice.1.X_ZTE_GponInterfaceConfig',
+        'InternetGatewayDevice.X_ZTE_COM_GponInterfaceConfig',
+        // Sinal óptico — Nokia/Alcatel
+        'InternetGatewayDevice.WANDevice.1.X_ALCL_GponInterfaceConfig',
+        'InternetGatewayDevice.X_ALCL_GponInterfaceConfig',
+        // Sinal óptico — Fiberhome
+        'InternetGatewayDevice.WANDevice.1.X_FH_GponInterfaceConfig',
+        // Sinal óptico — CT-COM / genérico TR-181
+        'InternetGatewayDevice.WANDevice.1.X_CT-COM_GponInterfaceConfig',
+        'Device.Optical.Interface.1',
       ]);
 
       for (const rawDevice of devices) {

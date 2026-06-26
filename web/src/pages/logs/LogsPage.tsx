@@ -35,7 +35,12 @@ export default function LogsPage() {
     refetchInterval: 15000,
   })
 
-  const logs: Record<string, unknown>[] = data?.logs || data || []
+  const allLogs: Record<string, unknown>[] = data?.data || data?.logs || data || []
+  const logs = allLogs.filter((l) =>
+    !search ||
+    String(l.message || '').toLowerCase().includes(search.toLowerCase()) ||
+    String(l.deviceId || '').toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
     <div className="space-y-5">
@@ -108,13 +113,13 @@ export default function LogsPage() {
                           </span>
                         )}
                         <span className="text-xs text-slate-400 ml-auto">
-                          {log.createdAt ? format(new Date(log.createdAt as string), 'dd/MM HH:mm:ss') : '—'}
+                          {(log.date || log.createdAt) ? format(new Date((log.date || log.createdAt) as string), 'dd/MM HH:mm:ss') : '—'}
                         </span>
                       </div>
                       <p className="text-sm text-slate-700 mt-1">{(log.message as string) || '—'}</p>
-                      {!!log.details && (
+                      {!!(log.metadata || log.details) && (
                         <pre className="text-xs text-slate-500 mt-1 bg-slate-50 rounded p-2 overflow-x-auto">
-                          {String(typeof log.details === 'string' ? log.details : JSON.stringify(log.details, null, 2))}
+                          {JSON.stringify(log.metadata || log.details, null, 2)}
                         </pre>
                       )}
                     </div>

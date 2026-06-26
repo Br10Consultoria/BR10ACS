@@ -25,6 +25,10 @@ export const devicesApi = {
     api.get(`/devices/${id}/timeseries`, { params: { metric, hours } }),
   diagnostics: (id: string, type: string, params?: Record<string, unknown>) =>
     api.post(`/devices/${id}/diagnostics/${type}`, params),
+  diagnosticsResult: (id: string, type: 'ping' | 'traceroute' | 'speedtest') =>
+    api.get(`/devices/${id}/diagnostics/${type}/result`),
+  diagnosticsHistory: (id: string, type?: string, limit = 20) =>
+    api.get(`/devices/${id}/diagnostics/history`, { params: { type, limit } }),
   stats: () => api.get('/devices/stats'),
 }
 
@@ -41,7 +45,9 @@ export const settingsApi = {
   update: (key: string, value: unknown) =>
     api.put(`/settings/${key}`, { value }),
   updateMany: (settings: Record<string, unknown>) =>
-    api.put('/settings', settings),
+    api.put('/settings', {
+      settings: Object.entries(settings).map(([key, value]) => ({ key, value })),
+    }),
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
