@@ -259,16 +259,31 @@ export class DeviceNormalizer {
   }
 
   private static extractWanTraffic(device: GenieDevice, field: string): number | null {
+    // field = 'BytesReceived' ou 'BytesSent'
+    const ethField = field.replace('Bytes', 'EthernetBytes'); // EthernetBytesReceived / EthernetBytesSent
     for (const wanIdx of ['1', '2']) {
       for (const connIdx of ['1', '2']) {
         for (const connType of ['WANPPPConnection', 'WANIPConnection']) {
-          const path = `InternetGatewayDevice.WANDevice.${wanIdx}.WANConnectionDevice.${connIdx}.${connType}.1.Stats.${field}._value`;
-          const val = this.getNestedValue(device, path);
-          if (val != null && val !== '') {
-            const n = parseFloat(String(val));
-            if (!isNaN(n)) return n;
+          // Tenta o campo padrão e o campo Ethernet (Intelbras)
+          for (const f of [field, ethField]) {
+            const path = `InternetGatewayDevice.WANDevice.${wanIdx}.WANConnectionDevice.${connIdx}.${connType}.1.Stats.${f}._value`;
+            const val = this.getNestedValue(device, path);
+            if (val != null && val !== '') {
+              const n = parseFloat(String(val));
+              if (!isNaN(n) && n > 0) return n;
+            }
           }
         }
+      }
+    }
+    // Fallback: WANCommonInterfaceConfig
+    const totalField = field === 'BytesReceived' ? 'TotalBytesReceived' : 'TotalBytesSent';
+    for (const wanIdx of ['1', '2']) {
+      const path = `InternetGatewayDevice.WANDevice.${wanIdx}.WANCommonInterfaceConfig.${totalField}._value`;
+      const val = this.getNestedValue(device, path);
+      if (val != null && val !== '') {
+        const n = parseFloat(String(val));
+        if (!isNaN(n) && n > 0) return n;
       }
     }
     return null;

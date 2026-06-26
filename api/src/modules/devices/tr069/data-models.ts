@@ -163,7 +163,10 @@ export const TR181_PARAM_MAP: Record<string, string> = {
 
 // Caminhos de sinal óptico por fabricante
 export const OPTICAL_SIGNAL_PATHS = [
-  // Intelbras
+  // Intelbras (path correto com typo do firmware)
+  'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower',
+  'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TXPower',
+  // Intelbras (path alternativo)
   'InternetGatewayDevice.WANDevice.1.X_ITBS_ORG_GponInterfaceConfig.RXPower',
   'InternetGatewayDevice.WANDevice.1.X_ITBS_ORG_GponInterfaceConfig.TXPower',
   'InternetGatewayDevice.X_ITBS_ORG_GponInterfaceConfig.RXPower',
@@ -194,7 +197,13 @@ export const OPTICAL_SIGNAL_PATHS = [
 ];
 
 export const TEMPERATURE_PATHS = [
+  // Intelbras (typo do firmware)
+  'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TransceiverTemperature',
+  // Intelbras alternativo
   'InternetGatewayDevice.WANDevice.1.X_ITBS_ORG_GponInterfaceConfig.Temperature',
+  // DeviceInfo TemperatureSensor (Optical Module = índice 2)
+  'InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.2.Value',
+  'InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value',
   'InternetGatewayDevice.WANDevice.1.X_HW_GponInterfaceConfig.Temperature',
   'InternetGatewayDevice.WANDevice.1.X_ZTE_GponInterfaceConfig.Temperature',
   'InternetGatewayDevice.X_ITBS_ORG_GponInterfaceConfig.Temperature',
@@ -202,6 +211,9 @@ export const TEMPERATURE_PATHS = [
 ];
 
 export const VOLTAGE_PATHS = [
+  // Intelbras (typo do firmware)
+  'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.SupplyVoltage',
+  // Intelbras alternativo
   'InternetGatewayDevice.WANDevice.1.X_ITBS_ORG_GponInterfaceConfig.Voltage',
   'InternetGatewayDevice.WANDevice.1.X_HW_GponInterfaceConfig.Voltage',
   'InternetGatewayDevice.WANDevice.1.X_ZTE_GponInterfaceConfig.Voltage',

@@ -8,6 +8,8 @@ import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { UserDocument, UserStatus } from '../users/schemas/user.schema';
 import { LoginDto, RefreshTokenDto } from './dto/auth.dto';
+import { LogsService } from '../logs/logs.service';
+import { LogCategory } from '../logs/schemas/log.schema';
 
 export interface TokenPair {
   accessToken: string;
@@ -32,11 +34,15 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private logsService: LogsService,
   ) {}
 
   async validateUser(username: string, password: string): Promise<UserDocument | null> {
     const user = await this.usersService.findByUsername(username);
-    if (!user) return null;
+    if (!user) {
+      await this.logsService.warn(`Tentativa de login com usuário inexistente: ${username}`, LogCategory.AUTH, { username }).catch(() => {});
+      return null;
+    }
 
     // Verificar bloqueio
     if (user.status === UserStatus.BLOCKED) {
@@ -56,11 +62,13 @@ export class AuthService {
           Date.now() + this.BLOCK_DURATION_MINUTES * 60 * 1000,
         );
         await this.usersService.blockUser(userId, blockedUntil);
-        this.logger.warn(`Usuário ${username} bloqueado por ${this.BLOCK_DURATION_MINUTES} minutos`);
+                this.logger.warn(`Usuário ${username} bloqueado por ${this.BLOCK_DURATION_MINUTES} minutos`);
+        await this.logsService.warn(`Usuário ${username} bloqueado após ${attempts} tentativas`, LogCategory.AUTH, { username, attempts, blockedUntil }, undefined, userId).catch(() => {});
+      } else {
+        await this.logsService.warn(`Senha incorreta para ${username} (tentativa ${attempts}/${this.MAX_LOGIN_ATTEMPTS})`, LogCategory.AUTH, { username, attempts }, undefined, userId).catch(() => {});
       }
       return null;
     }
-
     return user;
   }
 
@@ -74,7 +82,9 @@ export class AuthService {
       throw new UnauthorizedException('Conta inativa ou bloqueada');
     }
 
-    await this.usersService.updateLastLogin((user as any)._id?.toString());
+    const userId = (user as any)._id?.toString();
+    await this.usersService.updateLastLogin(userId);
+    await this.logsService.info(`Login realizado: ${user.username}`, LogCategory.AUTH, { username: user.username, role: user.role }, undefined, userId).catch(() => {});
     return this.generateTokens(user);
   }
 
@@ -97,6 +107,7 @@ export class AuthService {
 
   async logout(userId: string): Promise<void> {
     await this.usersService.clearRefreshToken(userId);
+    await this.logsService.info(`Logout realizado`, LogCategory.AUTH, {}, undefined, userId).catch(() => {});
   }
 
   private async generateTokens(user: UserDocument): Promise<TokenPair> {

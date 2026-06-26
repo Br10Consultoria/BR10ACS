@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import { TimeSeries, TimeSeriesDocument } from '../devices/schemas/timeseries.schema';
 import { GenieAcsService } from '../genieacs/genieacs.service';
 import { DeviceNormalizer } from '../devices/tr069/device-normalizer';
+import { LogsService } from '../logs/logs.service';
+import { LogCategory } from '../logs/schemas/log.schema';
 
 @Injectable()
 export class CollectorService implements OnModuleDestroy {
@@ -17,6 +19,7 @@ export class CollectorService implements OnModuleDestroy {
     @InjectModel(TimeSeries.name) private readonly tsModel: Model<TimeSeriesDocument>,
     private readonly genieAcs: GenieAcsService,
     private readonly config: ConfigService,
+    private readonly logsService: LogsService,
   ) {}
 
   onModuleDestroy() {
@@ -71,7 +74,9 @@ export class CollectorService implements OnModuleDestroy {
         // ManagementServer (URL, ConnectionRequest, PeriodicInform)
         'InternetGatewayDevice.ManagementServer',
         'Device.ManagementServer',
-        // Sinal óptico — Intelbras
+        // Sinal óptico — Intelbras (typo do firmware: Interafce)
+        'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig',
+        // Sinal óptico — Intelbras (path alternativo)
         'InternetGatewayDevice.WANDevice.1.X_ITBS_ORG_GponInterfaceConfig',
         'InternetGatewayDevice.X_ITBS_ORG_GponInterfaceConfig',
         // Sinal óptico — Huawei
@@ -137,12 +142,16 @@ export class CollectorService implements OnModuleDestroy {
         }
       }
 
-      if (collected > 0) {
+      if (collected > 0 || errors > 0) {
         this.logger.debug(`Coleta concluída: ${collected} dispositivos, ${errors} erros`);
+        if (errors > 0) {
+          await this.logsService.warn(`Coleta concluída com ${errors} erros (${collected} ok)`, LogCategory.SYSTEM, { collected, errors }).catch(() => {});
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Falha na coleta geral: ${msg}`);
+      await this.logsService.error(`Falha na coleta geral: ${msg}`, LogCategory.SYSTEM, { error: msg }).catch(() => {});
     } finally {
       this.isCollecting = false;
     }

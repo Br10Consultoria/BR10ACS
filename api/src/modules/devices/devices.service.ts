@@ -4,6 +4,8 @@ import { Model } from 'mongoose';
 import { GenieAcsService, GenieDevice } from '../genieacs/genieacs.service';
 import { DeviceNormalizer, NormalizedDevice } from './tr069/device-normalizer';
 import { TimeSeries, TimeSeriesDocument } from './schemas/timeseries.schema';
+import { LogsService } from '../logs/logs.service';
+import { LogCategory } from '../logs/schemas/log.schema';
 
 export interface DeviceListOptions {
   page?: number;
@@ -51,6 +53,7 @@ export class DevicesService {
   constructor(
     private genieAcsService: GenieAcsService,
     @InjectModel(TimeSeries.name) private timeSeriesModel: Model<TimeSeriesDocument>,
+    private logsService: LogsService,
   ) {}
 
   async list(options: DeviceListOptions = {}): Promise<DeviceListResult> {
@@ -108,7 +111,9 @@ export class DevicesService {
   }
 
   async reboot(deviceId: string): Promise<any> {
-    return this.genieAcsService.reboot(deviceId);
+    const result = await this.genieAcsService.reboot(deviceId);
+    await this.logsService.warn(`Reboot solicitado para ${deviceId}`, LogCategory.DEVICE, { deviceId }, deviceId).catch(() => {});
+    return result;
   }
 
   async factoryReset(deviceId: string): Promise<any> {
@@ -116,6 +121,7 @@ export class DevicesService {
   }
 
   async connectionRequest(deviceId: string): Promise<void> {
+    await this.logsService.info(`Connection Request (Sync) enviado para ${deviceId}`, LogCategory.DEVICE, { deviceId }, deviceId).catch(() => {});
     return this.genieAcsService.connectionRequest(deviceId);
   }
 
@@ -131,6 +137,7 @@ export class DevicesService {
       branches.map((b) => this.genieAcsService.refreshObject(deviceId, b)),
     );
     const ok = results.filter((r) => r.status === 'fulfilled').length;
+    await this.logsService.info(`Refresh completo solicitado para ${deviceId} (${ok}/${branches.length} ramos)`, LogCategory.DEVICE, { deviceId, ok, total: branches.length }, deviceId).catch(() => {});
     return { message: `Refresh solicitado: ${ok}/${branches.length} ramos`, deviceId };
   }
 
