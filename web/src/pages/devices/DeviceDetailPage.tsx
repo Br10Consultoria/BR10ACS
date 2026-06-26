@@ -52,6 +52,15 @@ export default function DeviceDetailPage() {
     onError: () => toast.error('Falha ao enviar Connection Request'),
   })
 
+  const refreshMutation = useMutation({
+    mutationFn: () => devicesApi.refresh(deviceId),
+    onSuccess: () => {
+      toast.success('Coleta forçada! Aguarde o dispositivo reportar...')
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['device', deviceId] }), 5000)
+    },
+    onError: () => toast.error('Falha ao forçar coleta'),
+  })
+
   if (isLoading) return <LoadingScreen />
   if (!device) return <div className="text-center py-12 text-slate-500">Dispositivo não encontrado</div>
 
@@ -119,8 +128,18 @@ export default function DeviceDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
+            title="Forçar coleta completa de todos os parâmetros TR-069"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button
             onClick={() => connReqMutation.mutate()}
             disabled={connReqMutation.isPending}
+            title="Enviar Connection Request (acorda o dispositivo)"
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${connReqMutation.isPending ? 'animate-spin' : ''}`} />

@@ -119,6 +119,21 @@ export class DevicesService {
     return this.genieAcsService.connectionRequest(deviceId);
   }
 
+  async refresh(deviceId: string): Promise<any> {
+    // refreshObject nos principais ramos para forçar coleta de todos os parâmetros
+    const branches = [
+      'InternetGatewayDevice.DeviceInfo',
+      'InternetGatewayDevice.WANDevice',
+      'InternetGatewayDevice.LANDevice',
+      'InternetGatewayDevice.ManagementServer',
+    ];
+    const results = await Promise.allSettled(
+      branches.map((b) => this.genieAcsService.refreshObject(deviceId, b)),
+    );
+    const ok = results.filter((r) => r.status === 'fulfilled').length;
+    return { message: `Refresh solicitado: ${ok}/${branches.length} ramos`, deviceId };
+  }
+
   async setParameter(deviceId: string, name: string, value: any, type: string): Promise<any> {
     return this.genieAcsService.setParameterValues(deviceId, [[name, value, type]]);
   }

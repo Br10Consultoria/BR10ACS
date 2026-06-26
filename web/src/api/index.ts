@@ -30,6 +30,7 @@ export const devicesApi = {
   diagnosticsHistory: (id: string, type?: string, limit = 20) =>
     api.get(`/devices/${id}/diagnostics/history`, { params: { type, limit } }),
   stats: () => api.get('/devices/stats'),
+  refresh: (id: string) => api.post(`/devices/${id}/refresh`),
 }
 
 // ── Logs ──────────────────────────────────────────────────────────────────────

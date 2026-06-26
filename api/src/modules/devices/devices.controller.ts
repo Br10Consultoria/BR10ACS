@@ -108,6 +108,14 @@ export class DevicesController {
     return this.devicesService.connectionRequest(id);
   }
 
+  @Post(':id/refresh')
+  @Roles(UserRole.OPERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Forçar coleta imediata de todos os parâmetros via refreshObject' })
+  async refresh(@Param('id') id: string) {
+    return this.devicesService.refresh(id);
+  }
+
   @Post(':id/parameters')
   @Roles(UserRole.OPERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.ACCEPTED)
