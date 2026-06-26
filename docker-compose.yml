@@ -5,9 +5,9 @@ version: '3.9'
 #
 # Topologia no servidor bot-enter:
 #   - MongoDB: usa o container geniacs-mongodb-1 já existente (banco br10)
-#   - GenieACS NBI: acessa via rede geniacs_default (http://geniacs-genieacs-nbi-1:7557)
-#   - Redis: container próprio do BR10ACS
-#   - API: exposta na porta 8080 (mesma que o geniacs-api usava)
+#   - GenieACS NBI: acessa via rede geniacs_geniacs_internal
+#   - Redis: container próprio do BR10ACS (rede br10acs_internal)
+#   - API: exposta na porta 8080
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -28,10 +28,10 @@ services:
       PORT: 3000
       # MongoDB: banco br10 no mesmo MongoDB do GenieACS
       MONGODB_URI: mongodb://geniacs-mongodb-1:27017/br10
-      # Redis: container próprio
+      # Redis: container próprio (rede interna)
       REDIS_HOST: br10acs-redis
       REDIS_PORT: 6379
-      # GenieACS NBI: acessado via rede interna Docker
+      # GenieACS NBI: acessado via rede do GENIACS
       GENIEACS_NBI_URL: http://geniacs-genieacs-nbi-1:7557
       GENIEACS_CWMP_URL: http://geniacs-genieacs-cwmp-1:7547
     volumes:
@@ -40,8 +40,8 @@ services:
       br10acs-redis:
         condition: service_healthy
     networks:
-      - br10acs_internal
-      - geniacs_default        # acesso ao MongoDB e NBI do GenieACS
+      - br10acs_internal          # comunicação com o Redis próprio
+      - geniacs_geniacs_internal  # acesso ao MongoDB e NBI do GenieACS
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
@@ -62,7 +62,7 @@ services:
     volumes:
       - br10acs_redis:/data
     networks:
-      - br10acs_internal
+      - br10acs_internal          # apenas rede interna — não precisa acessar o GENIACS
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -82,13 +82,12 @@ volumes:
     driver: local
 
 networks:
-  # Rede interna exclusiva do BR10ACS
+  # Rede interna exclusiva do BR10ACS (Redis <-> API)
   br10acs_internal:
     driver: bridge
-    name: br10acs_internal
 
-  # Rede externa do GENIACS — já existe no servidor
+  # Rede do GENIACS — já existe no servidor
   # Permite acesso ao geniacs-mongodb-1 e geniacs-genieacs-nbi-1
-  geniacs_default:
+  geniacs_geniacs_internal:
     external: true
-    name: geniacs_default
+    name: geniacs_geniacs_internal
