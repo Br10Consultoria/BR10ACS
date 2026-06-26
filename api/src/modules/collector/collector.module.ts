@@ -5,11 +5,13 @@ import { CollectorService } from './collector.service';
 import { CollectorController } from './collector.controller';
 import { TimeSeries, TimeSeriesSchema } from '../devices/schemas/timeseries.schema';
 import { GenieAcsModule } from '../genieacs/genieacs.module';
+import { AlertsModule } from '../alerts/alerts.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: TimeSeries.name, schema: TimeSeriesSchema }]),
     GenieAcsModule,
+    AlertsModule,
   ],
   providers: [CollectorService],
   controllers: [CollectorController],

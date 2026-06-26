@@ -25,7 +25,7 @@ export class IntegrationsService {
   }
 
   async update(id: string, data: Partial<Integration>): Promise<IntegrationDocument> {
-    const doc = await this.integrationModel.findByIdAndUpdate(id, { $set: data }, { new: true }).exec();
+    const doc = await this.integrationModel.findByIdAndUpdate(id, { $set: data }, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('Integração não encontrada');
     return doc;
   }

@@ -28,6 +28,7 @@ import { WebsocketModule } from './modules/websocket/websocket.module';
 import { CollectorModule } from './modules/collector/collector.module';
 import { PresetsModule } from './modules/presets/presets.module';
 import { FilesModule } from './modules/files/files.module';
+import { AlertsModule } from './modules/alerts/alerts.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -86,6 +87,7 @@ import { HealthController } from './health.controller';
     CollectorModule,
     PresetsModule,
     FilesModule,
+    AlertsModule,
   ],
   controllers: [HealthController],
 })

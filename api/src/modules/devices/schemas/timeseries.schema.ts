@@ -49,8 +49,8 @@ export class TimeSeries {
   @Prop({ type: Number, default: 0 })
   hostsCount: number;
 
-  @Prop({ type: String, default: null })
-  uptime: string | null;
+  @Prop({ type: Number, default: null })
+  uptime: number | null;
 
   @Prop({ type: String, default: null })
   linkStatus: string | null;

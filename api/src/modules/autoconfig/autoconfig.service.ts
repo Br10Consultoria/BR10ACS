@@ -30,7 +30,7 @@ export class AutoConfigService {
   }
 
   async update(id: string, data: Partial<AutoConfig>): Promise<AutoConfigDocument> {
-    const doc = await this.autoConfigModel.findByIdAndUpdate(id, { $set: data }, { new: true }).exec();
+    const doc = await this.autoConfigModel.findByIdAndUpdate(id, { $set: data }, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('AutoConfig não encontrado');
     return doc;
   }

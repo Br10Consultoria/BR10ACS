@@ -92,6 +92,14 @@ export const presetsApi = {
     api.post('/presets/apply-template', { oui, productClass }),
 }
 
+// ── Alerts ───────────────────────────────────────────────────────────────────
+export const alertsApi = {
+  list: (params?: Record<string, unknown>) => api.get('/alerts', { params }),
+  countUnacknowledged: () => api.get('/alerts/count/unacknowledged'),
+  acknowledge: (id: string) => api.post(`/alerts/${id}/acknowledge`),
+  acknowledgeAll: (deviceId?: string) => api.post('/alerts/acknowledge-all', { deviceId }),
+}
+
 // ── Files ─────────────────────────────────────────────────────────────────────
 export const filesApi = {
   listFiles: () => api.get('/files'),

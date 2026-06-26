@@ -1,15 +1,17 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Router, FileText, Settings, Users,
-  LogOut, ChevronRight, Wifi, Activity, Layers, HardDrive, Code2
+  LogOut, ChevronRight, Wifi, Activity, Layers, HardDrive, Code2, Bell
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
-import { authApi } from '@/api'
+import { authApi, alertsApi } from '@/api'
 import toast from 'react-hot-toast'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
   { to: '/devices', icon: Router, label: 'Dispositivos' },
+  { to: '/alerts', icon: Bell, label: 'Alertas', badge: true },
   { to: '/logs', icon: FileText, label: 'Logs' },
   { to: '/mass-ops', icon: Activity, label: 'Operações em Massa' },
 ]
@@ -37,6 +39,18 @@ export default function Sidebar() {
   const { user, clearAuth } = useAuthStore()
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
+  const { data: alertCount } = useQuery({
+    queryKey: ['alerts-count'],
+    queryFn: async () => {
+      const res = await alertsApi.countUnacknowledged()
+      return res.data as { count: number }
+    },
+    refetchInterval: 30000,
+    staleTime: 20000,
+  })
+
+  const unreadAlerts = alertCount?.count ?? 0
+
   const handleLogout = async () => {
     try { await authApi.logout() } catch { /* ignore */ }
     clearAuth()
@@ -62,11 +76,18 @@ export default function Sidebar() {
         <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider px-3 mb-2">
           Principal
         </p>
-        {navItems.map(({ to, icon: Icon, label, exact }) => (
+        {navItems.map(({ to, icon: Icon, label, exact, badge }) => (
           <NavLink key={to} to={to} end={exact} className={navLinkClass}>
             <Icon className="w-4.5 h-4.5 flex-shrink-0" />
             <span className="flex-1">{label}</span>
-            <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            {badge && unreadAlerts > 0 && (
+              <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                {unreadAlerts > 99 ? '99+' : unreadAlerts}
+              </span>
+            )}
+            {(!badge || unreadAlerts === 0) && (
+              <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            )}
           </NavLink>
         ))}
 

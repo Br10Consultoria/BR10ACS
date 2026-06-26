@@ -7,6 +7,7 @@ import { GenieAcsService } from '../genieacs/genieacs.service';
 import { DeviceNormalizer } from '../devices/tr069/device-normalizer';
 import { LogsService } from '../logs/logs.service';
 import { LogCategory } from '../logs/schemas/log.schema';
+import { AlertsService } from '../alerts/alerts.service';
 
 @Injectable()
 export class CollectorService implements OnModuleDestroy {
@@ -20,6 +21,7 @@ export class CollectorService implements OnModuleDestroy {
     private readonly genieAcs: GenieAcsService,
     private readonly config: ConfigService,
     private readonly logsService: LogsService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   onModuleDestroy() {
@@ -133,6 +135,16 @@ export class CollectorService implements OnModuleDestroy {
             { $set: tsDoc },
             { upsert: true },
           );
+
+          // Processa alertas de offline/sinal crítico
+          this.alertsService.processDeviceStatus({
+            id: normalized.id,
+            serial: normalized.serialNumber,
+            model: normalized.model,
+            pppLogin: normalized.pppLogin,
+            online: isOnline,
+            rxPower: normalized.rxPower,
+          }).catch(() => {});
 
           collected++;
         } catch (devErr: unknown) {

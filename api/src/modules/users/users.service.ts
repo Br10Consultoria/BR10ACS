@@ -65,7 +65,7 @@ export class UsersService {
       update.lastPasswordChange = new Date();
     }
     const user = await this.userModel
-      .findByIdAndUpdate(id, { $set: update }, { new: true })
+      .findByIdAndUpdate(id, { $set: update }, { returnDocument: 'after' })
       .select('-password -refreshToken -twoFactorSecret')
       .exec();
     if (!user) throw new NotFoundException('Usuário não encontrado');
@@ -95,7 +95,7 @@ export class UsersService {
 
   async incrementLoginAttempts(id: string): Promise<number> {
     const user = await this.userModel
-      .findByIdAndUpdate(id, { $inc: { loginAttempts: 1 } }, { new: true })
+      .findByIdAndUpdate(id, { $inc: { loginAttempts: 1 } }, { returnDocument: 'after' })
       .exec();
     return user?.loginAttempts || 0;
   }

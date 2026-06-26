@@ -221,6 +221,8 @@ export class DevicesService {
     offline: number;
     informedToday: number;
     byManufacturer: { manufacturer: string; count: number }[];
+    avgRxDbm: number | null;
+    criticalSignal: number;
   }> {
     const devices = await this.genieAcsService.getDevices({}, [
       '_id',
@@ -244,12 +246,17 @@ export class DevicesService {
       .map(([manufacturer, count]) => ({ manufacturer, count }))
       .sort((a, b) => b.count - a.count);
 
+    // Dados de sinal óptico via TimeSeries (mais recente por dispositivo)
+    const collectorStats = await this.collectorService.getDashboardStats();
+
     return {
       total: normalized.length,
       online,
       offline: normalized.length - online,
       informedToday,
       byManufacturer,
+      avgRxDbm: collectorStats.avgRxDbm,
+      criticalSignal: collectorStats.criticalSignal,
     };
   }
 
