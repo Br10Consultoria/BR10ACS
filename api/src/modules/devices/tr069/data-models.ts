@@ -181,6 +181,9 @@ export const OPTICAL_SIGNAL_PATHS = [
   'InternetGatewayDevice.WANDevice.1.X_ALU_GponInterfaceConfig.TXPower',
   'InternetGatewayDevice.X_ALCL_GponInterfaceConfig.RXPower',
   'InternetGatewayDevice.X_ALCL_GponInterfaceConfig.TXPower',
+  // Telefonica/MitraStar/Askey
+  'InternetGatewayDevice.X_TELEFONICA_COM_GPON.ReceivedOpticalPower',
+  'InternetGatewayDevice.X_TELEFONICA_COM_GPON.TransmittedOpticalPower',
   // ZTE
   'InternetGatewayDevice.WANDevice.1.X_ZTE_GponInterfaceConfig.RXPower',
   'InternetGatewayDevice.WANDevice.1.X_ZTE_GponInterfaceConfig.TXPower',
@@ -189,9 +192,11 @@ export const OPTICAL_SIGNAL_PATHS = [
   // Fiberhome
   'InternetGatewayDevice.WANDevice.1.X_FH_GponInterfaceConfig.RXPower',
   'InternetGatewayDevice.WANDevice.1.X_FH_GponInterfaceConfig.TXPower',
-  // Genérico
+  // Genérico/CT-COM
   'InternetGatewayDevice.WANDevice.1.X_CT-COM_GponInterfaceConfig.RXPower',
   'InternetGatewayDevice.WANDevice.1.X_CT-COM_GponInterfaceConfig.TXPower',
+  'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.X_CT-COM_WANGponLinkConfig.RXPower',
+  'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.X_CT-COM_WANGponLinkConfig.TXPower',
   'Device.Optical.Interface.1.Stats.RXPower',
   'Device.Optical.Interface.1.Stats.TXPower',
 ];
