@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -438,17 +438,13 @@ function useDiagnostic(deviceId: string, type: 'ping' | 'traceroute' | 'speedtes
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<DiagResult>(null)
   const [status, setStatus] = useState<string>('')
-  const [pollTimer, setPollTimer] = useState<ReturnType<typeof setInterval> | null>(null)
-
-  const stopPoll = (timer: ReturnType<typeof setInterval> | null) => {
-    if (timer) clearInterval(timer)
-  }
+  const pollTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
 
   const run = async (params: Record<string, unknown>) => {
     setLoading(true)
     setResult(null)
     setStatus('Enviando comando...')
-    setPollTimer(prev => { stopPoll(prev); return null })
+    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null }
     try {
       await devicesApi.diagnostics(deviceId, type, params)
       setStatus('Aguardando resultado do dispositivo...')
@@ -463,12 +459,12 @@ function useDiagnostic(deviceId: string, type: 'ping' | 'traceroute' | 'speedtes
             setStatus('')
             setLoading(false)
             clearInterval(interval)
-            setPollTimer(null)
+            pollTimerRef.current = null
           } else if (attempts >= 20) {
             setStatus('Timeout: dispositivo nao respondeu')
             setLoading(false)
             clearInterval(interval)
-            setPollTimer(null)
+            pollTimerRef.current = null
           }
         } catch {
           if (attempts >= 20) {
@@ -478,7 +474,7 @@ function useDiagnostic(deviceId: string, type: 'ping' | 'traceroute' | 'speedtes
           }
         }
       }, 3000)
-      setPollTimer(interval)
+      pollTimerRef.current = interval
     } catch {
       toast.error(`Falha ao iniciar ${type}`)
       setStatus('')

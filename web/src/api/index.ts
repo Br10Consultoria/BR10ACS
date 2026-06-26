@@ -69,3 +69,28 @@ export const massOpsApi = {
   get: (id: string) => api.get(`/mass-ops/${id}`),
   cancel: (id: string) => api.post(`/mass-ops/${id}/cancel`),
 }
+
+// ── Presets & Provisions ──────────────────────────────────────────────────────
+export const presetsApi = {
+  listPresets: () => api.get('/presets'),
+  putPreset: (name: string, body: object) =>
+    api.put(`/presets/${encodeURIComponent(name)}`, body),
+  deletePreset: (name: string) =>
+    api.delete(`/presets/${encodeURIComponent(name)}`),
+  listProvisions: () => api.get('/presets/provisions'),
+  putProvision: (name: string, script: string) =>
+    api.put(`/presets/provisions/${encodeURIComponent(name)}`, { script }),
+  deleteProvision: (name: string) =>
+    api.delete(`/presets/provisions/${encodeURIComponent(name)}`),
+}
+
+// ── Files ─────────────────────────────────────────────────────────────────────
+export const filesApi = {
+  listFiles: () => api.get('/files'),
+  uploadFile: (formData: FormData, fileType: string) =>
+    api.post(`/files/upload?fileType=${encodeURIComponent(fileType)}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteFile: (fileName: string) =>
+    api.delete(`/files/${encodeURIComponent(fileName)}`),
+}

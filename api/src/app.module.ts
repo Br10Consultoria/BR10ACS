@@ -26,6 +26,8 @@ import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { ApiClientsModule } from './modules/api-clients/api-clients.module';
 import { WebsocketModule } from './modules/websocket/websocket.module';
 import { CollectorModule } from './modules/collector/collector.module';
+import { PresetsModule } from './modules/presets/presets.module';
+import { FilesModule } from './modules/files/files.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -82,6 +84,8 @@ import { HealthController } from './health.controller';
     ApiClientsModule,
     WebsocketModule,
     CollectorModule,
+    PresetsModule,
+    FilesModule,
   ],
   controllers: [HealthController],
 })

@@ -178,6 +178,24 @@ export class GenieAcsService implements OnModuleInit {
     return res.data;
   }
 
+  async uploadFile(
+    fileName: string,
+    fileType: string,
+    buffer: Buffer,
+    mimeType = 'application/octet-stream',
+  ): Promise<void> {
+    await this.client.put(`/files/${encodeURIComponent(fileName)}`, buffer, {
+      headers: {
+        'Content-Type': mimeType,
+        'fileType': fileType,
+      },
+    });
+  }
+
+  async deleteFile(fileName: string): Promise<void> {
+    await this.client.delete(`/files/${encodeURIComponent(fileName)}`);
+  }
+
   // ─── Diagnósticos ─────────────────────────────────────────────────────────
 
   async ping(deviceId: string, host: string): Promise<any> {

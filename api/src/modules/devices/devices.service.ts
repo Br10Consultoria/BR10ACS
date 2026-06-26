@@ -146,15 +146,15 @@ export class DevicesService {
     to?: Date,
     limit = 100,
   ): Promise<TimeSeriesDocument[]> {
-    const query: any = { serialNumber };
+    const query: any = { deviceId: serialNumber };
     if (from || to) {
-      query.date = {};
-      if (from) query.date.$gte = from;
-      if (to) query.date.$lte = to;
+      query.timestamp = {};
+      if (from) query.timestamp.$gte = from;
+      if (to) query.timestamp.$lte = to;
     }
     return this.timeSeriesModel
       .find(query)
-      .sort({ date: -1 })
+      .sort({ timestamp: -1 })
       .limit(limit)
       .exec();
   }
@@ -165,23 +165,21 @@ export class DevicesService {
     const hostsEth = device.hosts.filter((h) => h.interfaceType === 'Ethernet').length;
 
     const snap = new this.timeSeriesModel({
-      serialNumber: device.serialNumber,
-      date: new Date(),
-      rx: device.rxPower,
-      tx: device.txPower,
-      temperature: device.temperature,
-      voltage: device.voltage,
-      connectedHosts: {
-        '5ghz': hosts5g,
-        '2ghz': hosts2g,
-        ethernet: hostsEth,
-        total: device.hosts.length,
-      },
-      wifiScore: this.calculateWifiScore(device),
-      wanDownload: device.wanBytesReceived || 0,
-      wanUpload: device.wanBytesSent || 0,
-      cpuUsage: device.cpuUsage,
-      memoryFree: device.memoryFree,
+      deviceId: device.serialNumber,
+      timestamp: new Date(),
+      online: device.online,
+      rxDbm: device.rxPower ?? null,
+      txDbm: device.txPower ?? null,
+      temperature: device.temperature ?? null,
+      voltage: device.voltage ?? null,
+      totalBytesReceived: device.wanBytesReceived ?? null,
+      totalBytesSent: device.wanBytesSent ?? null,
+      totalDownloadMB: device.wanBytesReceived ? Math.round(device.wanBytesReceived / 1024 / 1024) : null,
+      totalUploadMB: device.wanBytesSent ? Math.round(device.wanBytesSent / 1024 / 1024) : null,
+      totalAssociated: hosts5g + hosts2g,
+      hostsCount: device.hosts.length,
+      uptime: device.uptime ? String(device.uptime) : null,
+      linkStatus: null,
     });
 
     await snap.save();

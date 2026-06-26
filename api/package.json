@@ -1,7 +1,7 @@
 {
   "name": "@br10acs/api",
   "version": "1.0.0",
-  "description": "BR10ACS — Sistema de Gerenciamento ACS TR-069",
+  "description": "BR10ACS \u2014 Sistema de Gerenciamento ACS TR-069",
   "main": "index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -53,6 +53,7 @@
     "@types/passport-local": "^1.0.38",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@types/multer": "^1.4.12"
   }
 }

@@ -8,6 +8,9 @@ const pageTitles: Record<string, string> = {
   '/devices': 'Dispositivos',
   '/logs': 'Logs do Sistema',
   '/mass-ops': 'Operações em Massa',
+  '/presets': 'Presets & Provisões',
+  '/provisions': 'Presets & Provisões',
+  '/files': 'Arquivos',
   '/settings': 'Configurações',
   '/users': 'Usuários',
 }

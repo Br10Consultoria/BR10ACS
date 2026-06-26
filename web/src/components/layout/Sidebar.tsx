@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Router, FileText, Settings, Users,
-  LogOut, ChevronRight, Wifi, Activity
+  LogOut, ChevronRight, Wifi, Activity, Layers, HardDrive, Code2
 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
 import { authApi } from '@/api'
@@ -14,10 +14,23 @@ const navItems = [
   { to: '/mass-ops', icon: Activity, label: 'Operações em Massa' },
 ]
 
+const genieItems = [
+  { to: '/presets', icon: Layers, label: 'Presets' },
+  { to: '/provisions', icon: Code2, label: 'Provisões' },
+  { to: '/files', icon: HardDrive, label: 'Arquivos' },
+]
+
 const adminItems = [
   { to: '/settings', icon: Settings, label: 'Configurações' },
   { to: '/users', icon: Users, label: 'Usuários' },
 ]
+
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
+    isActive
+      ? 'bg-blue-600 text-white'
+      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+  }`
 
 export default function Sidebar() {
   const navigate = useNavigate()
@@ -50,18 +63,18 @@ export default function Sidebar() {
           Principal
         </p>
         {navItems.map(({ to, icon: Icon, label, exact }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={exact}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
-                isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`
-            }
-          >
+          <NavLink key={to} to={to} end={exact} className={navLinkClass}>
+            <Icon className="w-4.5 h-4.5 flex-shrink-0" />
+            <span className="flex-1">{label}</span>
+            <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </NavLink>
+        ))}
+
+        <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider px-3 mt-5 mb-2">
+          GenieACS
+        </p>
+        {genieItems.map(({ to, icon: Icon, label }) => (
+          <NavLink key={to} to={to} className={navLinkClass}>
             <Icon className="w-4.5 h-4.5 flex-shrink-0" />
             <span className="flex-1">{label}</span>
             <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -74,17 +87,7 @@ export default function Sidebar() {
               Administração
             </p>
             {adminItems.map(({ to, icon: Icon, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
-                    isActive
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  }`
-                }
-              >
+              <NavLink key={to} to={to} className={navLinkClass}>
                 <Icon className="w-4.5 h-4.5 flex-shrink-0" />
                 <span className="flex-1">{label}</span>
                 <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
