@@ -9,7 +9,7 @@ import { UserRole } from '../users/schemas/user.schema';
 @ApiTags('Coletor')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('api/v1/collector')
+@Controller('v1/collector')
 export class CollectorController {
   constructor(private readonly collectorService: CollectorService) {}
 
