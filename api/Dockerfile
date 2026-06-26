@@ -2,14 +2,14 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Instalar pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Instalar pnpm com versão exata
+RUN corepack enable && corepack prepare pnpm@11.8.0 --activate
 
 # Copiar arquivos de dependências
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml* ./
 
-# Instalar dependências
-RUN pnpm install --frozen-lockfile
+# Instalar todas as dependências (dev + prod para build)
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Copiar código fonte
 COPY tsconfig.json ./
@@ -18,24 +18,30 @@ COPY src ./src
 # Compilar TypeScript
 RUN pnpm run build
 
-# ─── Imagem de produção ───────────────────────────────────────────────────
+# ─── Imagem de produção ───────────────────────────────────────────────────────
 FROM node:22-alpine AS production
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.8.0 --activate
 
 # Copiar apenas o necessário para produção
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile --prod
+COPY package.json pnpm-lock.yaml* ./
 
+# Instalar apenas dependências de produção
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+
+# Copiar build compilado
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/tsconfig.json ./
 
 # Criar diretório de dados
 RUN mkdir -p /app/data
 
-# Usuário não-root
+# Instalar wget para healthcheck
+RUN apk add --no-cache wget
+
+# Usuário não-root para segurança
 RUN addgroup -S br10acs && adduser -S br10acs -G br10acs
 RUN chown -R br10acs:br10acs /app
 USER br10acs
