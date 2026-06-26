@@ -14,8 +14,8 @@ services:
   # ─── BR10ACS API ────────────────────────────────────────────────────────────
   br10acs-api:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: api/Dockerfile
     image: br10acs-api:latest
     container_name: br10acs-api
     restart: unless-stopped

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
 import {
@@ -50,6 +52,16 @@ import { HealthController } from './health.controller';
         dbName: 'br10',
       }),
       inject: [ConfigService],
+    }),
+
+    // Frontend estático (React build)
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', '..', 'web', 'dist'),
+      exclude: ['/api/(.*)'],
+      serveStaticOptions: {
+        index: 'index.html',
+        fallthrough: true,
+      },
     }),
 
     // Agendamento de tarefas
