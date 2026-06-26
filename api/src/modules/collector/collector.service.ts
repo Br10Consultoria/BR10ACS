@@ -159,6 +159,69 @@ export class CollectorService implements OnModuleDestroy {
     return { collected, errors };
   }
 
+  // Coleta imediata de um único dispositivo (chamada após Refresh/Sync)
+  async collectDevice(deviceId: string): Promise<boolean> {
+    try {
+      const PROJECTION = [
+        '_id', 'DeviceID', 'Events',
+        'InternetGatewayDevice.WANDevice',
+        'InternetGatewayDevice.LANDevice',
+        'InternetGatewayDevice.DeviceInfo',
+        'Device.DeviceInfo',
+        'InternetGatewayDevice.ManagementServer',
+        'Device.ManagementServer',
+        'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig',
+        'InternetGatewayDevice.WANDevice.1.X_ITBS_ORG_GponInterfaceConfig',
+        'InternetGatewayDevice.X_ITBS_ORG_GponInterfaceConfig',
+        'InternetGatewayDevice.WANDevice.1.X_HW_GponInterfaceConfig',
+        'InternetGatewayDevice.X_HW_GponInterfaceConfig',
+        'InternetGatewayDevice.WANDevice.1.X_ZTE_GponInterfaceConfig',
+        'InternetGatewayDevice.X_ZTE_COM_GponInterfaceConfig',
+        'InternetGatewayDevice.WANDevice.1.X_ALCL_GponInterfaceConfig',
+        'Device.Optical.Interface.1',
+      ];
+
+      const devices = await this.genieAcs.getDevices({ _id: deviceId }, PROJECTION);
+      if (!devices.length) return false;
+
+      const normalized = DeviceNormalizer.normalize(devices[0]);
+      if (!normalized?.id) return false;
+
+      const now = new Date();
+      const offlineAfter = this.config.get<number>('COLLECTOR_OFFLINE_AFTER', 900);
+      const isOnline = normalized.ageSeconds !== undefined ? normalized.ageSeconds < offlineAfter : false;
+
+      const rxMb = normalized.wanBytesReceived ? normalized.wanBytesReceived / (1024 * 1024) : null;
+      const txMb = normalized.wanBytesSent ? normalized.wanBytesSent / (1024 * 1024) : null;
+      const tsDoc = {
+        deviceId: normalized.id,
+        timestamp: now,
+        online: isOnline,
+        rxDbm: normalized.rxPower ?? null,
+        txDbm: normalized.txPower ?? null,
+        temperature: normalized.temperature ?? null,
+        voltage: normalized.voltage ?? null,
+        totalBytesReceived: normalized.wanBytesReceived ?? null,
+        totalBytesSent: normalized.wanBytesSent ?? null,
+        totalDownloadMB: rxMb !== null ? Math.round(rxMb * 100) / 100 : null,
+        totalUploadMB: txMb !== null ? Math.round(txMb * 100) / 100 : null,
+        totalAssociated: normalized.wifiNetworks?.reduce((a, w) => a + (w.associated ?? 0), 0) ?? 0,
+        hostsCount: normalized.hosts?.length ?? 0,
+        uptime: normalized.uptime ?? null,
+        linkStatus: normalized.pppConnectionStatus ?? null,
+      };
+
+      // Salva snapshot imediato (não usa bucket — timestamp exato)
+      await this.tsModel.create(tsDoc);
+      this.logger.debug(`Coleta imediata concluída para ${deviceId}`);
+      return true;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Erro na coleta imediata de ${deviceId}: ${msg}`);
+      return false;
+    }
+  }
+
   async collectHistory(): Promise<void> {
     // Limpa registros de TimeSeries com mais de 30 dias
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

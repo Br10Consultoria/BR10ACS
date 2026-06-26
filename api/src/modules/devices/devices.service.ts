@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { GenieAcsService, GenieDevice } from '../genieacs/genieacs.service';
@@ -6,6 +6,7 @@ import { DeviceNormalizer, NormalizedDevice } from './tr069/device-normalizer';
 import { TimeSeries, TimeSeriesDocument } from './schemas/timeseries.schema';
 import { LogsService } from '../logs/logs.service';
 import { LogCategory } from '../logs/schemas/log.schema';
+import { CollectorService } from '../collector/collector.service';
 
 export interface DeviceListOptions {
   page?: number;
@@ -54,6 +55,7 @@ export class DevicesService {
     private genieAcsService: GenieAcsService,
     @InjectModel(TimeSeries.name) private timeSeriesModel: Model<TimeSeriesDocument>,
     private logsService: LogsService,
+    @Inject(forwardRef(() => CollectorService)) private collectorService: CollectorService,
   ) {}
 
   async list(options: DeviceListOptions = {}): Promise<DeviceListResult> {
@@ -138,6 +140,12 @@ export class DevicesService {
     );
     const ok = results.filter((r) => r.status === 'fulfilled').length;
     await this.logsService.info(`Refresh completo solicitado para ${deviceId} (${ok}/${branches.length} ramos)`, LogCategory.DEVICE, { deviceId, ok, total: branches.length }, deviceId).catch(() => {});
+
+    // Coleta imediata após 15s (dá tempo ao dispositivo de reportar)
+    setTimeout(() => {
+      this.collectorService.collectDevice(deviceId).catch(() => {});
+    }, 15000);
+
     return { message: `Refresh solicitado: ${ok}/${branches.length} ramos`, deviceId };
   }
 

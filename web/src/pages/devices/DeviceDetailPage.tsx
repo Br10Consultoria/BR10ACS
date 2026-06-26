@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -24,14 +24,40 @@ export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [activeTab, setActiveTab] = useState('info')
   const [rawSearch, setRawSearch] = useState('')
+  const [isPolling, setIsPolling] = useState(false)
+  const [pollCountdown, setPollCountdown] = useState(0)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qc = useQueryClient()
-
   const deviceId = decodeURIComponent(id || '')
+
+  // Polling inteligente: após Refresh/Sync, re-fetch a cada 5s por 60s
+  const startPolling = (durationSec = 60) => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    setIsPolling(true)
+    setPollCountdown(durationSec)
+    let remaining = durationSec
+    pollRef.current = setInterval(() => {
+      remaining -= 5
+      setPollCountdown(remaining)
+      qc.invalidateQueries({ queryKey: ['device', deviceId] })
+      if (remaining <= 0) {
+        clearInterval(pollRef.current!)
+        pollRef.current = null
+        setIsPolling(false)
+        setPollCountdown(0)
+        toast.success('Dados atualizados!')
+      }
+    }, 5000)
+  }
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [])
 
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', deviceId],
     queryFn: () => devicesApi.get(deviceId).then(r => r.data),
-    refetchInterval: 30000,
+    refetchInterval: isPolling ? 5000 : 30000,
   })
 
   const { data: rawParams, isLoading: rawLoading } = useQuery({
@@ -48,15 +74,18 @@ export default function DeviceDetailPage() {
 
   const connReqMutation = useMutation({
     mutationFn: () => devicesApi.connectionRequest(deviceId),
-    onSuccess: () => toast.success('Connection Request enviado'),
+    onSuccess: () => {
+      toast.success('Connection Request enviado — monitorando por 60s...')
+      startPolling(60)
+    },
     onError: () => toast.error('Falha ao enviar Connection Request'),
   })
 
   const refreshMutation = useMutation({
     mutationFn: () => devicesApi.refresh(deviceId),
     onSuccess: () => {
-      toast.success('Coleta forçada! Aguarde o dispositivo reportar...')
-      setTimeout(() => qc.invalidateQueries({ queryKey: ['device', deviceId] }), 5000)
+      toast.success('Refresh solicitado — monitorando por 60s...')
+      startPolling(60)
     },
     onError: () => toast.error('Falha ao forçar coleta'),
   })
@@ -106,6 +135,29 @@ export default function DeviceDetailPage() {
 
   return (
     <div className="space-y-5">
+      {/* Indicador de polling ativo */}
+      {isPolling && (
+        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
+          <RefreshCw className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium text-blue-700">Monitorando atualizações — re-fetch a cada 5s</span>
+              <span className="text-xs text-blue-600 font-mono">{pollCountdown}s restantes</span>
+            </div>
+            <div className="w-full bg-blue-200 rounded-full h-1">
+              <div
+                className="bg-blue-600 h-1 rounded-full transition-all duration-1000"
+                style={{ width: `${(pollCountdown / 60) * 100}%` }}
+              />
+            </div>
+          </div>
+          <button
+            onClick={() => { if (pollRef.current) clearInterval(pollRef.current); setIsPolling(false); setPollCountdown(0) }}
+            className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+          >Parar</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
