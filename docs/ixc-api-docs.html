@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BR10ACS — Documentação da API IXC</title>
+  <style>
+    :root {
+      --brand:        #2563eb;
+      --brand-light:  #dbeafe;
+      --brand-dark:   #1e40af;
+      --get:          #0284c7;
+      --get-bg:       #e0f2fe;
+      --post:         #16a34a;
+      --post-bg:      #dcfce7;
+      --put:          #d97706;
+      --put-bg:       #fef3c7;
+      --delete:       #dc2626;
+      --delete-bg:    #fee2e2;
+      --sidebar-w:    280px;
+      --radius:       10px;
+      --shadow:       0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md:    0 4px 6px -1px rgba(0,0,0,.08), 0 2px 4px -1px rgba(0,0,0,.06);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      line-height: 1.6;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: #0f172a;
+      color: #cbd5e1;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+    }
+    .sidebar-header {
+      padding: 24px 20px 16px;
+      border-bottom: 1px solid #1e293b;
+    }
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .sidebar-logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .sidebar-logo-text { font-size: 17px; font-weight: 700; color: #f1f5f9; }
+    .sidebar-subtitle { font-size: 11px; color: #64748b; }
+    .sidebar-version {
+      display: inline-block;
+      margin-top: 8px;
+      background: #1e293b;
+      color: #94a3b8;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-family: monospace;
+    }
+    .sidebar-nav { padding: 12px 0; flex: 1; }
+    .nav-section {
+      padding: 8px 20px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #475569;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 20px;
+      font-size: 13px;
+      color: #94a3b8;
+      text-decoration: none;
+      transition: background .15s, color .15s;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover { background: #1e293b; color: #e2e8f0; }
+    .nav-item.active { background: #1e3a5f; color: #93c5fd; border-left-color: #3b82f6; }
+    .nav-badge {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 20px;
+    }
+    .nav-badge.get    { background: #0c4a6e; color: #7dd3fc; }
+    .nav-badge.post   { background: #14532d; color: #86efac; }
+    .nav-badge.put    { background: #451a03; color: #fcd34d; }
+    .nav-badge.delete { background: #450a0a; color: #fca5a5; }
+
+    /* ── Main ── */
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      max-width: calc(100% - var(--sidebar-w));
+    }
+    .topbar {
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 14px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-title { font-size: 15px; font-weight: 600; color: #1e293b; }
+    .topbar-meta { font-size: 12px; color: #64748b; }
+    .topbar-badge {
+      background: #dbeafe; color: #1d4ed8;
+      font-size: 11px; font-weight: 600;
+      padding: 3px 10px; border-radius: 20px;
+    }
+    .content { padding: 40px; max-width: 960px; }
+
+    /* ── Sections ── */
+    .section { margin-bottom: 56px; }
+    .section-title {
+      font-size: 22px; font-weight: 700; color: #0f172a;
+      margin-bottom: 6px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-title .icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .section-desc { font-size: 14px; color: #475569; margin-bottom: 24px; max-width: 680px; }
+
+    /* ── Endpoint card ── */
+    .endpoint-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s;
+    }
+    .endpoint-header:hover { background: #f8fafc; }
+    .method-badge {
+      font-size: 11px; font-weight: 700;
+      padding: 3px 10px; border-radius: 6px;
+      min-width: 56px; text-align: center;
+      letter-spacing: .04em;
+      flex-shrink: 0;
+    }
+    .method-badge.GET    { background: var(--get-bg);    color: var(--get); }
+    .method-badge.POST   { background: var(--post-bg);   color: var(--post); }
+    .method-badge.PUT    { background: var(--put-bg);    color: var(--put); }
+    .method-badge.DELETE { background: var(--delete-bg); color: var(--delete); }
+    .endpoint-path {
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 14px; font-weight: 600; color: #1e293b;
+      flex: 1;
+    }
+    .endpoint-summary { font-size: 13px; color: #64748b; }
+    .endpoint-chevron {
+      color: #94a3b8;
+      transition: transform .2s;
+      font-size: 18px;
+    }
+    .endpoint-card.open .endpoint-chevron { transform: rotate(180deg); }
+    .endpoint-body { display: none; border-top: 1px solid #f1f5f9; }
+    .endpoint-card.open .endpoint-body { display: block; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+    .tab {
+      padding: 10px 20px;
+      font-size: 13px; font-weight: 500;
+      color: #64748b;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    .tab:hover { color: #1e293b; }
+    .tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+    .tab-content { display: none; padding: 20px; }
+    .tab-content.active { display: block; }
+
+    /* ── Params table ── */
+    .params-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .params-table th {
+      text-align: left; padding: 8px 12px;
+      background: #f8fafc; color: #475569;
+      font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .params-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .params-table tr:last-child td { border-bottom: none; }
+    .param-name { font-family: monospace; font-size: 13px; color: #1e293b; font-weight: 600; }
+    .param-type { font-family: monospace; font-size: 11px; background: #f1f5f9; color: #475569; padding: 1px 6px; border-radius: 4px; }
+    .param-required { font-size: 10px; color: #dc2626; font-weight: 600; }
+    .param-optional { font-size: 10px; color: #94a3b8; }
+    .param-desc { color: #475569; font-size: 13px; }
+
+    /* ── Code blocks ── */
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.7;
+      font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+      position: relative;
+    }
+    .code-label {
+      font-size: 11px; font-weight: 600;
+      color: #64748b; letter-spacing: .06em; text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .copy-btn {
+      position: absolute; top: 10px; right: 10px;
+      background: #1e293b; color: #94a3b8;
+      border: 1px solid #334155; border-radius: 6px;
+      padding: 4px 10px; font-size: 11px; cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .copy-btn:hover { background: #334155; color: #e2e8f0; }
+    .copy-btn.copied { color: #4ade80; }
+
+    /* ── Response schema ── */
+    .schema-block {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .schema-title { font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .06em; }
+    .schema-field { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+    .schema-field:last-child { border-bottom: none; }
+    .schema-key { font-family: monospace; color: #1e293b; font-weight: 600; min-width: 160px; }
+    .schema-type { font-family: monospace; font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; height: fit-content; }
+    .schema-desc { color: #64748b; font-size: 12px; }
+
+    /* ── Alert boxes ── */
+    .alert {
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .alert-info    { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; }
+    .alert-warn    { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .alert-icon { font-size: 16px; flex-shrink: 0; }
+
+    /* ── Auth section ── */
+    .auth-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+    .auth-card h3 { font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 12px; }
+
+    /* ── Flow diagram ── */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    .flow-step {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 12px;
+      text-align: center;
+      min-width: 120px;
+      box-shadow: var(--shadow);
+    }
+    .flow-step .step-num {
+      width: 22px; height: 22px;
+      background: var(--brand); color: white;
+      border-radius: 50%; font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 6px;
+    }
+    .flow-step .step-label { font-weight: 600; color: #1e293b; }
+    .flow-step .step-sub { color: #64748b; margin-top: 2px; }
+    .flow-arrow { color: #94a3b8; font-size: 20px; padding: 0 8px; }
+
+    /* ── Highlight tokens ── */
+    .hl-key    { color: #93c5fd; }
+    .hl-str    { color: #86efac; }
+    .hl-num    { color: #fcd34d; }
+    .hl-bool   { color: #f9a8d4; }
+    .hl-null   { color: #f9a8d4; }
+    .hl-comment{ color: #64748b; font-style: italic; }
+    .hl-method { color: #c084fc; }
+    .hl-url    { color: #67e8f9; }
+    .hl-header { color: #fbbf24; }
+
+    /* ── Overview grid ── */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .overview-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .overview-card .oc-icon { font-size: 28px; margin-bottom: 10px; }
+    .overview-card .oc-num  { font-size: 28px; font-weight: 700; color: #0f172a; }
+    .overview-card .oc-label{ font-size: 12px; color: #64748b; margin-top: 2px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; max-width: 100%; }
+      .content { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══════════════════════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">🔗</div>
+      <span class="sidebar-logo-text">BR10ACS</span>
+    </div>
+    <div class="sidebar-subtitle">Documentação da API IXC</div>
+    <span class="sidebar-version">v1.0 — IxcService</span>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">Introdução</div>
+    <a href="#overview"       class="nav-item active">📋 Visão Geral</a>
+    <a href="#auth"           class="nav-item">🔐 Autenticação</a>
+    <a href="#fluxo"          class="nav-item">🔄 Fluxo de Consulta</a>
+    <a href="#erros"          class="nav-item">⚠️ Erros e Logs</a>
+
+    <div class="nav-section">Endpoints IXC</div>
+    <a href="#rad-user"       class="nav-item">👤 Usuário RADIUS <span class="nav-badge get">GET</span></a>
+    <a href="#ont-fibra"      class="nav-item">📡 ONT Fibra <span class="nav-badge get">GET</span></a>
+    <a href="#ont-complete"   class="nav-item">🔍 Busca Completa <span class="nav-badge get">GET</span></a>
+    <a href="#onts-contract"  class="nav-item">📋 ONTs do Contrato <span class="nav-badge get">GET</span></a>
+    <a href="#ont-signal"     class="nav-item">📶 Atualizar Sinal <span class="nav-badge put">PUT</span></a>
+    <a href="#parse-collection" class="nav-item">📁 Importar Coleção <span class="nav-badge post">POST</span></a>
+
+    <div class="nav-section">Schemas</div>
+    <a href="#schema-radusuario" class="nav-item">📄 IxcRadUsuario</a>
+    <a href="#schema-ontfibra"   class="nav-item">📄 IxcOntFibra</a>
+    <a href="#schema-lookup"     class="nav-item">📄 IxcOntLookupResult</a>
+
+    <div class="nav-section">Outros Endpoints</div>
+    <a href="#outros-crud"    class="nav-item">⚙️ CRUD de Integrações</a>
+    <a href="#outros-lookup"  class="nav-item">🔎 Lookup Genérico ERP</a>
+    <a href="#outros-actions" class="nav-item">⚡ Ações ERP</a>
+    <a href="#outros-test"    class="nav-item">🧪 Teste de Conexão</a>
+  </nav>
+</aside>
+
+<!-- ══ MAIN ═════════════════════════════════════════════════════════════════ -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">API de Integrações IXC — BR10ACS</div>
+      <div class="topbar-meta">Base URL: <code>https://&lt;seu-servidor&gt;/api</code> &nbsp;·&nbsp; Autenticação: Bearer JWT</div>
+    </div>
+    <span class="topbar-badge">REST API</span>
+  </div>
+
+  <div class="content">
+
+    <!-- ══ VISÃO GERAL ══════════════════════════════════════════════════════ -->
+    <section class="section" id="overview">
+      <div class="section-title">
+        <div class="icon" style="background:#eff6ff">📋</div>
+        Visão Geral
+      </div>
+      <p class="section-desc">
+        O módulo <strong>IxcService</strong> do BR10ACS fornece integração avançada com a API REST do IXC Soft,
+        cobrindo consulta de usuários RADIUS, ONTs fibra autorizadas, dados de sinal óptico e importação
+        automática de coleções de API. Todos os endpoints requerem autenticação JWT via header
+        <code>Authorization: Bearer &lt;token&gt;</code>.
+      </p>
+
+      <div class="overview-grid">
+        <div class="overview-card">
+          <div class="oc-icon">📡</div>
+          <div class="oc-num">5</div>
+          <div class="oc-label">Endpoints IXC</div>
+        </div>
+        <div class="overview-card">
+          <div class="oc-icon">🗄️</div>
+          <div class="oc-num">2</div>
+          <div class="oc-label">Tabelas IXC cobertas</div>
+        </div>
+        <div class="overview-card">
+          <div class="oc-icon">🔐</div>
+          <div class="oc-num">Basic</div>
+          <div class="oc-label">Auth com IXC</div>
+        </div>
+        <div class="overview-card">
+          <div class="oc-icon">⏱️</div>
+          <div class="oc-num">12s</div>
+          <div class="oc-label">Timeout por requisição</div>
+        </div>
+      </div>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div>Todos os endpoints IXC seguem o padrão <code>/v1/integrations/:id/ixc/...</code> onde
+        <code>:id</code> é o ObjectId MongoDB da integração IXC configurada no BR10ACS.
+        Você pode obter o ID na tela de Integrações do painel.</div>
+      </div>
+    </section>
+
+    <!-- ══ AUTENTICAÇÃO ═════════════════════════════════════════════════════ -->
+    <section class="section" id="auth">
+      <div class="section-title">
+        <div class="icon" style="background:#faf5ff">🔐</div>
+        Autenticação
+      </div>
+      <p class="section-desc">O sistema usa duas camadas de autenticação distintas.</p>
+
+      <div class="auth-card">
+        <h3>1. JWT — BR10ACS (todas as requisições à API interna)</h3>
+        <p style="font-size:13px;color:#475569;margin-bottom:12px">
+          Obtenha o token via <code>POST /v1/auth/login</code> e inclua em todas as requisições:
+        </p>
+        <div class="code-label">Header obrigatório</div>
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</pre>
+      </div>
+
+      <div class="auth-card">
+        <h3>2. Basic Auth — IXC Soft (gerenciado internamente pelo BR10ACS)</h3>
+        <p style="font-size:13px;color:#475569;margin-bottom:12px">
+          O token IXC é armazenado criptografado na integração e usado automaticamente.
+          O formato do token é <code>userId:hash</code> — obtido nas configurações de API do IXC Soft.
+        </p>
+        <div class="code-label">Formato do token IXC</div>
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-comment">// Exemplo de token IXC (userId:hash)</span>
+<span class="hl-str">6:4dacdb8e47193e8cbbabe508c3c59b4547e463817b1d9b9a1d20ab4812fe1a62</span>
+
+<span class="hl-comment">// O BR10ACS converte para Base64 e envia como:</span>
+<span class="hl-header">Authorization</span>: Basic NjozZGFjZGI4ZTQ3MTkzZThjYmJhYmU1MDhj...</pre>
+
+        <div class="alert alert-warn" style="margin-top:12px;margin-bottom:0">
+          <span class="alert-icon">⚠️</span>
+          <div>O token IXC <strong>nunca é exposto</strong> na interface ou nas respostas da API. Ele é armazenado
+          criptografado no MongoDB e usado apenas internamente pelo IxcService.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ FLUXO ════════════════════════════════════════════════════════════ -->
+    <section class="section" id="fluxo">
+      <div class="section-title">
+        <div class="icon" style="background:#f0fdf4">🔄</div>
+        Fluxo de Consulta de ONT
+      </div>
+      <p class="section-desc">
+        O endpoint de busca completa (<code>/ixc/ont-complete</code>) executa uma sequência de consultas
+        para retornar o máximo de informações sobre uma ONT.
+      </p>
+
+      <div class="flow">
+        <div class="flow-step">
+          <div class="step-num">1</div>
+          <div class="step-label">radusuarios</div>
+          <div class="step-sub">por login / MAC</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="step-num">2</div>
+          <div class="step-label">radpop_fibra</div>
+          <div class="step-sub">por id_login</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="step-num">3</div>
+          <div class="step-label">Merge</div>
+          <div class="step-sub">resultado unificado</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="step-num">4</div>
+          <div class="step-label">Resposta</div>
+          <div class="step-sub">IxcOntLookupResult</div>
+        </div>
+      </div>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div>Se o usuário não for encontrado no <code>radusuarios</code> mas o parâmetro <code>mac</code>
+        for fornecido, o sistema tenta diretamente no <code>radpop_radio_cliente_fibra</code> como fallback.</div>
+      </div>
+    </section>
+
+    <!-- ══ ERROS E LOGS ═════════════════════════════════════════════════════ -->
+    <section class="section" id="erros">
+      <div class="section-title">
+        <div class="icon" style="background:#fff7ed">⚠️</div>
+        Erros e Logs
+      </div>
+      <p class="section-desc">
+        Todos os erros de comunicação com o IXC são registrados no MongoDB e visíveis na tela de Logs do BR10ACS.
+      </p>
+
+      <div class="auth-card">
+        <h3>Formato de resposta de erro</h3>
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"found"</span>: <span class="hl-bool">false</span>,
+  <span class="hl-key">"error"</span>: <span class="hl-str">"Integração não encontrada"</span>
+}</pre>
+      </div>
+
+      <table class="params-table" style="background:white;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0">
+        <thead>
+          <tr>
+            <th>Situação</th>
+            <th>Nível de Log</th>
+            <th>Categoria</th>
+            <th>Mensagem</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Integração não encontrada</td>
+            <td><span class="param-type">—</span></td>
+            <td>—</td>
+            <td>Retorna <code>found: false</code> sem log</td>
+          </tr>
+          <tr>
+            <td>Integração desabilitada</td>
+            <td><span class="param-type">—</span></td>
+            <td>—</td>
+            <td>Retorna <code>found: false</code> sem log</td>
+          </tr>
+          <tr>
+            <td>Erro HTTP na API IXC</td>
+            <td><span style="color:#dc2626;font-weight:600">ERROR</span></td>
+            <td>INTEGRATION</td>
+            <td>Mensagem do erro + incrementa stats.errors</td>
+          </tr>
+          <tr>
+            <td>Teste de conexão OK</td>
+            <td><span style="color:#16a34a;font-weight:600">INFO</span></td>
+            <td>INTEGRATION</td>
+            <td>Latência em ms + status HTTP</td>
+          </tr>
+          <tr>
+            <td>Teste de conexão falhou</td>
+            <td><span style="color:#d97706;font-weight:600">WARN</span></td>
+            <td>INTEGRATION</td>
+            <td>Mensagem do erro de conexão</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         ENDPOINTS IXC
+    ═══════════════════════════════════════════════════════════════════════ -->
+
+    <section class="section" id="rad-user">
+      <div class="section-title">
+        <div class="icon" style="background:#eff6ff">👤</div>
+        Buscar Usuário RADIUS
+      </div>
+      <p class="section-desc">
+        Consulta a tabela <code>radusuarios</code> do IXC Soft. Retorna dados de login PPPoE, status de conexão,
+        IP atual, MAC, concentrador, VLAN e informações da ONT associada.
+      </p>
+
+      <div class="endpoint-card open" id="ep-rad-user">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge GET">GET</span>
+          <span class="endpoint-path">/v1/integrations/:id/ixc/rad-user</span>
+          <span class="endpoint-summary">Buscar usuário RADIUS por login, MAC ou MAC da ONT</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'rad-params')">Parâmetros</div>
+            <div class="tab" onclick="switchTab(this, 'rad-example')">Exemplo</div>
+            <div class="tab" onclick="switchTab(this, 'rad-response')">Resposta</div>
+          </div>
+
+          <div class="tab-content active" id="rad-params">
+            <table class="params-table">
+              <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Obrigatório</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="param-name">:id</span></td>
+                  <td><span class="param-type">path</span></td>
+                  <td><span class="param-required">Sim</span></td>
+                  <td class="param-desc">ObjectId MongoDB da integração IXC configurada no BR10ACS</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">login</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">Login PPPoE do usuário (ex: <code>cliente001</code>)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">mac</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">MAC do equipamento (ex: <code>AA:BB:CC:DD:EE:FF</code>)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">onuMac</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">MAC da ONT (campo <code>onu_mac</code> no IXC)</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="alert alert-warn" style="margin-top:12px">
+              <span class="alert-icon">⚠️</span>
+              <div>* Pelo menos um dos parâmetros de busca (<code>login</code>, <code>mac</code> ou <code>onuMac</code>) deve ser informado.
+              A prioridade é: <code>login</code> &gt; <code>mac</code> &gt; <code>onuMac</code>.</div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="rad-example">
+            <div class="code-label">Busca por login PPPoE</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/rad-user?login=cliente001</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+
+            <div class="code-label" style="margin-top:16px">Busca por MAC da ONT</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/rad-user?onuMac=48:57:02:AA:BB:CC</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+
+            <div class="code-label" style="margin-top:16px">Exemplo com fetch (JavaScript)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-comment">// Busca usuário RADIUS por login PPPoE</span>
+<span class="hl-key">const</span> response = <span class="hl-key">await</span> fetch(
+  <span class="hl-str">'/api/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/rad-user?login=cliente001'</span>,
+  {
+    headers: {
+      <span class="hl-str">'Authorization'</span>: <span class="hl-str">`Bearer ${token}`</span>
+    }
+  }
+);
+<span class="hl-key">const</span> data = <span class="hl-key">await</span> response.json();
+<span class="hl-key">if</span> (data.found) {
+  console.log(<span class="hl-str">'Login:'</span>, data.data.login);
+  console.log(<span class="hl-str">'IP atual:'</span>, data.data.ip);
+  console.log(<span class="hl-str">'Online:'</span>, data.data.online === <span class="hl-str">'SS'</span>);
+}</pre>
+          </div>
+
+          <div class="tab-content" id="rad-response">
+            <div class="code-label">Resposta — Encontrado (200 OK)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"found"</span>: <span class="hl-bool">true</span>,
+  <span class="hl-key">"data"</span>: {
+    <span class="hl-key">"id"</span>: <span class="hl-str">"1842"</span>,
+    <span class="hl-key">"login"</span>: <span class="hl-str">"cliente001"</span>,
+    <span class="hl-key">"ativo"</span>: <span class="hl-str">"S"</span>,
+    <span class="hl-key">"online"</span>: <span class="hl-str">"SS"</span>,         <span class="hl-comment">// SS=online, SN=desconectado, NS=suspenso</span>
+    <span class="hl-key">"ip"</span>: <span class="hl-str">"10.1.2.34"</span>,
+    <span class="hl-key">"mac"</span>: <span class="hl-str">"AA:BB:CC:DD:EE:FF"</span>,
+    <span class="hl-key">"onu_mac"</span>: <span class="hl-str">"48:57:02:AA:BB:CC"</span>,
+    <span class="hl-key">"id_cliente"</span>: <span class="hl-str">"512"</span>,
+    <span class="hl-key">"id_contrato"</span>: <span class="hl-str">"1024"</span>,
+    <span class="hl-key">"concentrador"</span>: <span class="hl-str">"OLT-NORTE-01"</span>,
+    <span class="hl-key">"interface"</span>: <span class="hl-str">"pon-1/1/3"</span>,
+    <span class="hl-key">"vlan"</span>: <span class="hl-str">"100"</span>,
+    <span class="hl-key">"sinal_ultimo_atendimento"</span>: <span class="hl-str">"-22.5"</span>,
+    <span class="hl-key">"ultima_conexao_inicial"</span>: <span class="hl-str">"2025-06-27 08:14:00"</span>,
+    <span class="hl-key">"download_atual"</span>: <span class="hl-str">"100"</span>,
+    <span class="hl-key">"upload_atual"</span>: <span class="hl-str">"50"</span>,
+    <span class="hl-key">"onu_numero"</span>: <span class="hl-str">"42"</span>,
+    <span class="hl-key">"tipo_equipamento"</span>: <span class="hl-str">"GPON"</span>
+  }
+}</pre>
+
+            <div class="code-label" style="margin-top:16px">Resposta — Não encontrado (200 OK)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{ <span class="hl-key">"found"</span>: <span class="hl-bool">false</span> }</pre>
+
+            <div class="alert alert-info" style="margin-top:12px">
+              <span class="alert-icon">ℹ️</span>
+              <div>O campo <code>online</code> segue o padrão IXC: <code>SS</code> = online, <code>SN</code> = desconectado,
+              <code>NS</code> = suspenso, <code>NN</code> = inativo.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ ONT FIBRA ════════════════════════════════════════════════════════ -->
+    <section class="section" id="ont-fibra">
+      <div class="section-title">
+        <div class="icon" style="background:#f0fdf4">📡</div>
+        Buscar ONT Fibra
+      </div>
+      <p class="section-desc">
+        Consulta a tabela <code>radpop_radio_cliente_fibra</code> do IXC Soft. Retorna dados de sinal óptico
+        (RX/TX), temperatura, voltagem, VLAN, PON ID, distância da ONT e histórico de quedas.
+      </p>
+
+      <div class="endpoint-card" id="ep-ont-fibra">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge GET">GET</span>
+          <span class="endpoint-path">/v1/integrations/:id/ixc/ont-fibra</span>
+          <span class="endpoint-summary">Buscar ONT fibra por MAC, número, contrato ou login</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'ontf-params')">Parâmetros</div>
+            <div class="tab" onclick="switchTab(this, 'ontf-example')">Exemplo</div>
+            <div class="tab" onclick="switchTab(this, 'ontf-response')">Resposta</div>
+          </div>
+
+          <div class="tab-content active" id="ontf-params">
+            <table class="params-table">
+              <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Obrigatório</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="param-name">:id</span></td>
+                  <td><span class="param-type">path</span></td>
+                  <td><span class="param-required">Sim</span></td>
+                  <td class="param-desc">ObjectId da integração IXC</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">mac</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">MAC da ONT (campo <code>mac</code> na tabela fibra)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">onuNumero</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">Número da ONT na OLT (campo <code>onu_numero</code>)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">idContrato</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">ID do contrato no IXC (campo <code>id_contrato</code>)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">idLogin</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">ID do login RADIUS (campo <code>id_login</code>, retornado pelo radusuarios)</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="alert alert-warn" style="margin-top:12px">
+              <span class="alert-icon">⚠️</span>
+              <div>* Prioridade de busca: <code>mac</code> &gt; <code>onuNumero</code> &gt; <code>idContrato</code> &gt; <code>idLogin</code>.</div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="ontf-example">
+            <div class="code-label">Busca por MAC da ONT</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/ont-fibra?mac=48:57:02:AA:BB:CC</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+
+            <div class="code-label" style="margin-top:16px">Busca por ID de contrato</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/ont-fibra?idContrato=1024</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+          </div>
+
+          <div class="tab-content" id="ontf-response">
+            <div class="code-label">Resposta — Encontrado (200 OK)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"found"</span>: <span class="hl-bool">true</span>,
+  <span class="hl-key">"data"</span>: {
+    <span class="hl-key">"id"</span>: <span class="hl-str">"387"</span>,
+    <span class="hl-key">"nome"</span>: <span class="hl-str">"ONT-CLIENTE-001"</span>,
+    <span class="hl-key">"mac"</span>: <span class="hl-str">"48:57:02:AA:BB:CC"</span>,
+    <span class="hl-key">"ponid"</span>: <span class="hl-str">"1"</span>,
+    <span class="hl-key">"onu_numero"</span>: <span class="hl-str">"42"</span>,
+    <span class="hl-key">"vlan"</span>: <span class="hl-str">"100"</span>,
+    <span class="hl-key">"ip_gerencia"</span>: <span class="hl-str">"192.168.100.42"</span>,
+    <span class="hl-key">"sinal_rx"</span>: <span class="hl-str">"-22.50"</span>,      <span class="hl-comment">// dBm — sinal recebido pela OLT</span>
+    <span class="hl-key">"sinal_tx"</span>: <span class="hl-str">"2.30"</span>,       <span class="hl-comment">// dBm — sinal transmitido pela ONT</span>
+    <span class="hl-key">"temperatura"</span>: <span class="hl-str">"42.5"</span>,    <span class="hl-comment">// °C</span>
+    <span class="hl-key">"voltagem"</span>: <span class="hl-str">"3.28"</span>,      <span class="hl-comment">// V</span>
+    <span class="hl-key">"data_sinal"</span>: <span class="hl-str">"2025-06-27 10:30:00"</span>,
+    <span class="hl-key">"causa_ultima_queda"</span>: <span class="hl-str">"LOS"</span>,
+    <span class="hl-key">"versao"</span>: <span class="hl-str">"V3.0.0B09P1"</span>,
+    <span class="hl-key">"id_contrato"</span>: <span class="hl-str">"1024"</span>,
+    <span class="hl-key">"id_login"</span>: <span class="hl-str">"1842"</span>,
+    <span class="hl-key">"id_transmissor"</span>: <span class="hl-str">"5"</span>,
+    <span class="hl-key">"porta_ftth"</span>: <span class="hl-str">"3"</span>,
+    <span class="hl-key">"slotno"</span>: <span class="hl-str">"1"</span>,
+    <span class="hl-key">"ponno"</span>: <span class="hl-str">"1"</span>,
+    <span class="hl-key">"distancia_onu"</span>: <span class="hl-str">"1234"</span>   <span class="hl-comment">// metros</span>
+  }
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ ONT COMPLETE ═════════════════════════════════════════════════════ -->
+    <section class="section" id="ont-complete">
+      <div class="section-title">
+        <div class="icon" style="background:#fdf4ff">🔍</div>
+        Busca Completa da ONT
+      </div>
+      <p class="section-desc">
+        Endpoint recomendado para a maioria dos casos de uso. Executa automaticamente a sequência
+        <code>radusuarios → radpop_radio_cliente_fibra</code> e retorna dados unificados em uma única chamada.
+      </p>
+
+      <div class="endpoint-card" id="ep-ont-complete">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge GET">GET</span>
+          <span class="endpoint-path">/v1/integrations/:id/ixc/ont-complete</span>
+          <span class="endpoint-summary">Busca completa: radusuarios + radpop_radio_cliente_fibra</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'ontc-params')">Parâmetros</div>
+            <div class="tab" onclick="switchTab(this, 'ontc-example')">Exemplo</div>
+            <div class="tab" onclick="switchTab(this, 'ontc-response')">Resposta</div>
+          </div>
+
+          <div class="tab-content active" id="ontc-params">
+            <table class="params-table">
+              <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Obrigatório</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="param-name">:id</span></td>
+                  <td><span class="param-type">path</span></td>
+                  <td><span class="param-required">Sim</span></td>
+                  <td class="param-desc">ObjectId da integração IXC</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">login</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">Login PPPoE do usuário</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">mac</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">MAC do equipamento ou da ONT</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">serial</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-optional">Opcional*</span></td>
+                  <td class="param-desc">Serial da ONT (reservado para uso futuro)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="tab-content" id="ontc-example">
+            <div class="code-label">Busca completa por login</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/ont-complete?login=cliente001</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+
+            <div class="code-label" style="margin-top:16px">Busca completa por MAC (fallback automático)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/ont-complete?mac=48:57:02:AA:BB:CC</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+          </div>
+
+          <div class="tab-content" id="ontc-response">
+            <div class="code-label">Resposta — Encontrado com dados completos (200 OK)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"found"</span>: <span class="hl-bool">true</span>,
+  <span class="hl-key">"radUsuario"</span>: {
+    <span class="hl-key">"id"</span>: <span class="hl-str">"1842"</span>,
+    <span class="hl-key">"login"</span>: <span class="hl-str">"cliente001"</span>,
+    <span class="hl-key">"ativo"</span>: <span class="hl-str">"S"</span>,
+    <span class="hl-key">"online"</span>: <span class="hl-str">"SS"</span>,
+    <span class="hl-key">"ip"</span>: <span class="hl-str">"10.1.2.34"</span>,
+    <span class="hl-key">"concentrador"</span>: <span class="hl-str">"OLT-NORTE-01"</span>,
+    <span class="hl-comment">// ... demais campos de radusuarios</span>
+  },
+  <span class="hl-key">"ontFibra"</span>: {
+    <span class="hl-key">"id"</span>: <span class="hl-str">"387"</span>,
+    <span class="hl-key">"sinal_rx"</span>: <span class="hl-str">"-22.50"</span>,
+    <span class="hl-key">"sinal_tx"</span>: <span class="hl-str">"2.30"</span>,
+    <span class="hl-key">"temperatura"</span>: <span class="hl-str">"42.5"</span>,
+    <span class="hl-key">"causa_ultima_queda"</span>: <span class="hl-str">"LOS"</span>,
+    <span class="hl-comment">// ... demais campos de radpop_radio_cliente_fibra</span>
+  }
+}</pre>
+
+            <div class="alert alert-success" style="margin-top:12px">
+              <span class="alert-icon">✅</span>
+              <div>Se o usuário for encontrado no <code>radusuarios</code> mas não houver dados de fibra,
+              o campo <code>ontFibra</code> será omitido da resposta. Verifique sempre a presença de
+              <code>found: true</code> antes de acessar os campos.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ ONTs DO CONTRATO ═════════════════════════════════════════════════ -->
+    <section class="section" id="onts-contract">
+      <div class="section-title">
+        <div class="icon" style="background:#f0fdf4">📋</div>
+        ONTs do Contrato
+      </div>
+      <p class="section-desc">
+        Lista todas as ONTs fibra associadas a um contrato IXC. Útil para clientes com múltiplas ONTs
+        (ex: empresas com vários pontos de acesso no mesmo contrato).
+      </p>
+
+      <div class="endpoint-card" id="ep-onts-contract">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge GET">GET</span>
+          <span class="endpoint-path">/v1/integrations/:id/ixc/onts-by-contract</span>
+          <span class="endpoint-summary">Listar todas as ONTs fibra de um contrato IXC</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'ontct-params')">Parâmetros</div>
+            <div class="tab" onclick="switchTab(this, 'ontct-example')">Exemplo</div>
+            <div class="tab" onclick="switchTab(this, 'ontct-response')">Resposta</div>
+          </div>
+
+          <div class="tab-content active" id="ontct-params">
+            <table class="params-table">
+              <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Obrigatório</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="param-name">:id</span></td>
+                  <td><span class="param-type">path</span></td>
+                  <td><span class="param-required">Sim</span></td>
+                  <td class="param-desc">ObjectId da integração IXC</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">idContrato</span></td>
+                  <td><span class="param-type">query</span></td>
+                  <td><span class="param-required">Sim</span></td>
+                  <td class="param-desc">ID do contrato no IXC Soft</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="alert alert-info" style="margin-top:12px">
+              <span class="alert-icon">ℹ️</span>
+              <div>Retorna até 50 ONTs por contrato. O campo <code>total</code> na resposta indica o total real
+              de registros no IXC.</div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="ontct-example">
+            <div class="code-label">Listar ONTs do contrato 1024</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/onts-by-contract?idContrato=1024</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+          </div>
+
+          <div class="tab-content" id="ontct-response">
+            <div class="code-label">Resposta (200 OK)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"found"</span>: <span class="hl-bool">true</span>,
+  <span class="hl-key">"total"</span>: <span class="hl-num">3</span>,
+  <span class="hl-key">"data"</span>: [
+    {
+      <span class="hl-key">"id"</span>: <span class="hl-str">"387"</span>,
+      <span class="hl-key">"mac"</span>: <span class="hl-str">"48:57:02:AA:BB:CC"</span>,
+      <span class="hl-key">"sinal_rx"</span>: <span class="hl-str">"-22.50"</span>,
+      <span class="hl-key">"sinal_tx"</span>: <span class="hl-str">"2.30"</span>,
+      <span class="hl-key">"versao"</span>: <span class="hl-str">"V3.0.0B09P1"</span>
+    },
+    {
+      <span class="hl-key">"id"</span>: <span class="hl-str">"388"</span>,
+      <span class="hl-key">"mac"</span>: <span class="hl-str">"48:57:02:DD:EE:FF"</span>,
+      <span class="hl-key">"sinal_rx"</span>: <span class="hl-str">"-24.10"</span>,
+      <span class="hl-key">"sinal_tx"</span>: <span class="hl-str">"2.10"</span>,
+      <span class="hl-key">"versao"</span>: <span class="hl-str">"V3.0.0B09P1"</span>
+    }
+  ]
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ ATUALIZAR SINAL ══════════════════════════════════════════════════ -->
+    <section class="section" id="ont-signal">
+      <div class="section-title">
+        <div class="icon" style="background:#fffbeb">📶</div>
+        Atualizar Sinal da ONT
+      </div>
+      <p class="section-desc">
+        Atualiza os dados de sinal óptico de uma ONT fibra diretamente no IXC Soft.
+        Requer perfil <strong>Admin</strong> ou <strong>Super Admin</strong>.
+      </p>
+
+      <div class="endpoint-card" id="ep-ont-signal">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge PUT">PUT</span>
+          <span class="endpoint-path">/v1/integrations/:id/ixc/ont-signal/:ontId</span>
+          <span class="endpoint-summary">Atualizar sinal_rx, sinal_tx, temperatura e voltagem de uma ONT</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'sig-params')">Parâmetros</div>
+            <div class="tab" onclick="switchTab(this, 'sig-example')">Exemplo</div>
+            <div class="tab" onclick="switchTab(this, 'sig-response')">Resposta</div>
+          </div>
+
+          <div class="tab-content active" id="sig-params">
+            <table class="params-table">
+              <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Obrigatório</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="param-name">:id</span></td>
+                  <td><span class="param-type">path</span></td>
+                  <td><span class="param-required">Sim</span></td>
+                  <td class="param-desc">ObjectId da integração IXC</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">:ontId</span></td>
+                  <td><span class="param-type">path</span></td>
+                  <td><span class="param-required">Sim</span></td>
+                  <td class="param-desc">ID da ONT na tabela <code>radpop_radio_cliente_fibra</code> do IXC</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">sinal_rx</span></td>
+                  <td><span class="param-type">body</span></td>
+                  <td><span class="param-optional">Opcional</span></td>
+                  <td class="param-desc">Sinal recebido em dBm (ex: <code>"-22.50"</code>)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">sinal_tx</span></td>
+                  <td><span class="param-type">body</span></td>
+                  <td><span class="param-optional">Opcional</span></td>
+                  <td class="param-desc">Sinal transmitido em dBm (ex: <code>"2.30"</code>)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">temperatura</span></td>
+                  <td><span class="param-type">body</span></td>
+                  <td><span class="param-optional">Opcional</span></td>
+                  <td class="param-desc">Temperatura em °C (ex: <code>"42.5"</code>)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">voltagem</span></td>
+                  <td><span class="param-type">body</span></td>
+                  <td><span class="param-optional">Opcional</span></td>
+                  <td class="param-desc">Voltagem em V (ex: <code>"3.28"</code>)</td>
+                </tr>
+                <tr>
+                  <td><span class="param-name">data_sinal</span></td>
+                  <td><span class="param-type">body</span></td>
+                  <td><span class="param-optional">Opcional</span></td>
+                  <td class="param-desc">Data/hora da medição (formato: <code>YYYY-MM-DD HH:mm:ss</code>). Se omitido, usa a data/hora atual.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="tab-content" id="sig-example">
+            <div class="code-label">Atualizar sinal da ONT ID 387</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">PUT</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/ixc/ont-signal/387</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...
+<span class="hl-header">Content-Type</span>: application/json
+
+{
+  <span class="hl-key">"sinal_rx"</span>: <span class="hl-str">"-22.50"</span>,
+  <span class="hl-key">"sinal_tx"</span>: <span class="hl-str">"2.30"</span>,
+  <span class="hl-key">"temperatura"</span>: <span class="hl-str">"42.5"</span>,
+  <span class="hl-key">"voltagem"</span>: <span class="hl-str">"3.28"</span>
+}</pre>
+          </div>
+
+          <div class="tab-content" id="sig-response">
+            <div class="code-label">Resposta — Sucesso (200 OK)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button">{ <span class="hl-key">"ok"</span>: <span class="hl-bool">true</span> }</pre>
+
+            <div class="code-label" style="margin-top:16px">Resposta — Erro</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"ok"</span>: <span class="hl-bool">false</span>,
+  <span class="hl-key">"error"</span>: <span class="hl-str">"Request failed with status code 404"</span>
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ IMPORTAR COLEÇÃO ═════════════════════════════════════════════════ -->
+    <section class="section" id="parse-collection">
+      <div class="section-title">
+        <div class="icon" style="background:#fdf4ff">📁</div>
+        Importar Coleção de API
+      </div>
+      <p class="section-desc">
+        Analisa um arquivo de coleção de API no formato Node.js (como os exportados pelo IXC Soft)
+        e extrai automaticamente os endpoints, URL base e tipo de autenticação para configuração da integração.
+      </p>
+
+      <div class="endpoint-card" id="ep-parse-collection">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge POST">POST</span>
+          <span class="endpoint-path">/v1/integrations/parse-collection</span>
+          <span class="endpoint-summary">Analisar coleção .js e extrair endpoints para auto-configuração</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'pc-params')">Parâmetros</div>
+            <div class="tab" onclick="switchTab(this, 'pc-example')">Exemplo</div>
+            <div class="tab" onclick="switchTab(this, 'pc-response')">Resposta</div>
+          </div>
+
+          <div class="tab-content active" id="pc-params">
+            <table class="params-table">
+              <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Obrigatório</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="param-name">content</span></td>
+                  <td><span class="param-type">body</span></td>
+                  <td><span class="param-required">Sim</span></td>
+                  <td class="param-desc">Conteúdo completo do arquivo .js da coleção de API</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="tab-content" id="pc-example">
+            <div class="code-label">Enviar coleção para análise</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button"><span class="hl-method">POST</span> <span class="hl-url">/v1/integrations/parse-collection</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...
+<span class="hl-header">Content-Type</span>: application/json
+
+{
+  <span class="hl-key">"content"</span>: <span class="hl-str">"let request = require('request');\nlet token = '6:4dacdb...';\nlet options = { method: 'GET', url: 'https://HOST/webservice/v1/radusuarios', ... }"</span>
+}</pre>
+          </div>
+
+          <div class="tab-content" id="pc-response">
+            <div class="code-label">Resposta (200 OK)</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"endpoints"</span>: [
+    {
+      <span class="hl-key">"name"</span>: <span class="hl-str">"Listar radusuarios"</span>,
+      <span class="hl-key">"method"</span>: <span class="hl-str">"GET"</span>,
+      <span class="hl-key">"path"</span>: <span class="hl-str">"/webservice/v1/radusuarios"</span>,
+      <span class="hl-key">"description"</span>: <span class="hl-str">"Endpoint detectado automaticamente"</span>,
+      <span class="hl-key">"bodyFields"</span>: [<span class="hl-str">"qtype"</span>, <span class="hl-str">"query"</span>, <span class="hl-str">"oper"</span>]
+    }
+  ],
+  <span class="hl-key">"baseUrl"</span>: <span class="hl-str">"https://HOST"</span>,
+  <span class="hl-key">"authType"</span>: <span class="hl-str">"basic"</span>
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SCHEMAS ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="schema-radusuario">
+      <div class="section-title">
+        <div class="icon" style="background:#f8fafc">📄</div>
+        Schema: IxcRadUsuario
+      </div>
+      <p class="section-desc">Estrutura completa retornada pela tabela <code>radusuarios</code> do IXC Soft.</p>
+
+      <div class="schema-block">
+        <div class="schema-title">IxcRadUsuario</div>
+        <div class="schema-field"><span class="schema-key">id</span><span class="schema-type">string</span><span class="schema-desc">ID único do registro</span></div>
+        <div class="schema-field"><span class="schema-key">login</span><span class="schema-type">string</span><span class="schema-desc">Login PPPoE do usuário</span></div>
+        <div class="schema-field"><span class="schema-key">ativo</span><span class="schema-type">string</span><span class="schema-desc"><code>"S"</code> = ativo, <code>"N"</code> = inativo</span></div>
+        <div class="schema-field"><span class="schema-key">online</span><span class="schema-type">string</span><span class="schema-desc"><code>"SS"</code>=online, <code>"SN"</code>=desconectado, <code>"NS"</code>=suspenso, <code>"NN"</code>=inativo</span></div>
+        <div class="schema-field"><span class="schema-key">ip</span><span class="schema-type">string</span><span class="schema-desc">IP atual do cliente</span></div>
+        <div class="schema-field"><span class="schema-key">mac</span><span class="schema-type">string</span><span class="schema-desc">MAC do equipamento do cliente</span></div>
+        <div class="schema-field"><span class="schema-key">onu_mac</span><span class="schema-type">string</span><span class="schema-desc">MAC da ONT</span></div>
+        <div class="schema-field"><span class="schema-key">id_cliente</span><span class="schema-type">string</span><span class="schema-desc">ID do cliente no IXC</span></div>
+        <div class="schema-field"><span class="schema-key">id_contrato</span><span class="schema-type">string</span><span class="schema-desc">ID do contrato no IXC</span></div>
+        <div class="schema-field"><span class="schema-key">id_concentrador</span><span class="schema-type">string</span><span class="schema-desc">ID do concentrador (OLT)</span></div>
+        <div class="schema-field"><span class="schema-key">concentrador</span><span class="schema-type">string</span><span class="schema-desc">Nome do concentrador (OLT)</span></div>
+        <div class="schema-field"><span class="schema-key">interface</span><span class="schema-type">string</span><span class="schema-desc">Interface da OLT (ex: <code>pon-1/1/3</code>)</span></div>
+        <div class="schema-field"><span class="schema-key">vlan</span><span class="schema-type">string</span><span class="schema-desc">VLAN do cliente</span></div>
+        <div class="schema-field"><span class="schema-key">sinal_ultimo_atendimento</span><span class="schema-type">string</span><span class="schema-desc">Sinal RX em dBm no último atendimento</span></div>
+        <div class="schema-field"><span class="schema-key">ultima_conexao_inicial</span><span class="schema-type">string</span><span class="schema-desc">Data/hora de início da última conexão</span></div>
+        <div class="schema-field"><span class="schema-key">ultima_conexao_final</span><span class="schema-type">string</span><span class="schema-desc">Data/hora de fim da última conexão</span></div>
+        <div class="schema-field"><span class="schema-key">motivo_desconexao</span><span class="schema-type">string</span><span class="schema-desc">Motivo da última desconexão</span></div>
+        <div class="schema-field"><span class="schema-key">download_atual</span><span class="schema-type">string</span><span class="schema-desc">Velocidade de download em Mbps</span></div>
+        <div class="schema-field"><span class="schema-key">upload_atual</span><span class="schema-type">string</span><span class="schema-desc">Velocidade de upload em Mbps</span></div>
+        <div class="schema-field"><span class="schema-key">tempo_conectado</span><span class="schema-type">string</span><span class="schema-desc">Tempo de conexão atual</span></div>
+        <div class="schema-field"><span class="schema-key">id_transmissor</span><span class="schema-type">string</span><span class="schema-desc">ID do transmissor (OLT) no IXC</span></div>
+        <div class="schema-field"><span class="schema-key">modelo_tranmissor</span><span class="schema-type">string</span><span class="schema-desc">Modelo do transmissor</span></div>
+        <div class="schema-field"><span class="schema-key">ftth_porta</span><span class="schema-type">string</span><span class="schema-desc">Porta FTTH na OLT</span></div>
+        <div class="schema-field"><span class="schema-key">onu_numero</span><span class="schema-type">string</span><span class="schema-desc">Número da ONT na PON</span></div>
+        <div class="schema-field"><span class="schema-key">tipo_equipamento</span><span class="schema-type">string</span><span class="schema-desc">Tipo de equipamento (ex: <code>GPON</code>)</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="schema-ontfibra">
+      <div class="section-title">
+        <div class="icon" style="background:#f8fafc">📄</div>
+        Schema: IxcOntFibra
+      </div>
+      <p class="section-desc">Estrutura completa retornada pela tabela <code>radpop_radio_cliente_fibra</code> do IXC Soft.</p>
+
+      <div class="schema-block">
+        <div class="schema-title">IxcOntFibra</div>
+        <div class="schema-field"><span class="schema-key">id</span><span class="schema-type">string</span><span class="schema-desc">ID único do registro</span></div>
+        <div class="schema-field"><span class="schema-key">nome</span><span class="schema-type">string</span><span class="schema-desc">Nome da ONT no IXC</span></div>
+        <div class="schema-field"><span class="schema-key">mac</span><span class="schema-type">string</span><span class="schema-desc">MAC da ONT</span></div>
+        <div class="schema-field"><span class="schema-key">ponid</span><span class="schema-type">string</span><span class="schema-desc">ID da PON</span></div>
+        <div class="schema-field"><span class="schema-key">onu_numero</span><span class="schema-type">string</span><span class="schema-desc">Número da ONT na PON</span></div>
+        <div class="schema-field"><span class="schema-key">gemport</span><span class="schema-type">string</span><span class="schema-desc">GEM Port da ONT</span></div>
+        <div class="schema-field"><span class="schema-key">service_port</span><span class="schema-type">string</span><span class="schema-desc">Service Port na OLT</span></div>
+        <div class="schema-field"><span class="schema-key">vlan</span><span class="schema-type">string</span><span class="schema-desc">VLAN de dados</span></div>
+        <div class="schema-field"><span class="schema-key">vlan_pppoe</span><span class="schema-type">string</span><span class="schema-desc">VLAN PPPoE</span></div>
+        <div class="schema-field"><span class="schema-key">vlan_dhcp</span><span class="schema-type">string</span><span class="schema-desc">VLAN DHCP</span></div>
+        <div class="schema-field"><span class="schema-key">vlan_tr69</span><span class="schema-type">string</span><span class="schema-desc">VLAN TR-069 (ACS)</span></div>
+        <div class="schema-field"><span class="schema-key">ip_gerencia</span><span class="schema-type">string</span><span class="schema-desc">IP de gerência da ONT</span></div>
+        <div class="schema-field"><span class="schema-key">sinal_rx</span><span class="schema-type">string</span><span class="schema-desc">Sinal recebido em dBm (ex: <code>"-22.50"</code>)</span></div>
+        <div class="schema-field"><span class="schema-key">sinal_tx</span><span class="schema-type">string</span><span class="schema-desc">Sinal transmitido em dBm (ex: <code>"2.30"</code>)</span></div>
+        <div class="schema-field"><span class="schema-key">temperatura</span><span class="schema-type">string</span><span class="schema-desc">Temperatura do módulo óptico em °C</span></div>
+        <div class="schema-field"><span class="schema-key">voltagem</span><span class="schema-type">string</span><span class="schema-desc">Voltagem do módulo óptico em V</span></div>
+        <div class="schema-field"><span class="schema-key">data_sinal</span><span class="schema-type">string</span><span class="schema-desc">Data/hora da última medição de sinal</span></div>
+        <div class="schema-field"><span class="schema-key">causa_ultima_queda</span><span class="schema-type">string</span><span class="schema-desc">Causa da última queda (ex: <code>LOS</code>, <code>LOF</code>)</span></div>
+        <div class="schema-field"><span class="schema-key">versao</span><span class="schema-type">string</span><span class="schema-desc">Versão de firmware da ONT</span></div>
+        <div class="schema-field"><span class="schema-key">id_contrato</span><span class="schema-type">string</span><span class="schema-desc">ID do contrato no IXC</span></div>
+        <div class="schema-field"><span class="schema-key">id_login</span><span class="schema-type">string</span><span class="schema-desc">ID do login RADIUS associado</span></div>
+        <div class="schema-field"><span class="schema-key">id_transmissor</span><span class="schema-type">string</span><span class="schema-desc">ID da OLT no IXC</span></div>
+        <div class="schema-field"><span class="schema-key">id_caixa_ftth</span><span class="schema-type">string</span><span class="schema-desc">ID da caixa FTTH</span></div>
+        <div class="schema-field"><span class="schema-key">porta_ftth</span><span class="schema-type">string</span><span class="schema-desc">Porta FTTH</span></div>
+        <div class="schema-field"><span class="schema-key">id_hardware</span><span class="schema-type">string</span><span class="schema-desc">ID do hardware (modelo da ONT)</span></div>
+        <div class="schema-field"><span class="schema-key">tipo_autenticacao</span><span class="schema-type">string</span><span class="schema-desc">Tipo de autenticação da ONT</span></div>
+        <div class="schema-field"><span class="schema-key">slotno</span><span class="schema-type">string</span><span class="schema-desc">Número do slot na OLT</span></div>
+        <div class="schema-field"><span class="schema-key">ponno</span><span class="schema-type">string</span><span class="schema-desc">Número da PON no slot</span></div>
+        <div class="schema-field"><span class="schema-key">distancia_onu</span><span class="schema-type">string</span><span class="schema-desc">Distância da ONT em metros</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="schema-lookup">
+      <div class="section-title">
+        <div class="icon" style="background:#f8fafc">📄</div>
+        Schema: IxcOntLookupResult
+      </div>
+      <p class="section-desc">Estrutura retornada pelo endpoint de busca completa <code>/ixc/ont-complete</code>.</p>
+
+      <div class="schema-block">
+        <div class="schema-title">IxcOntLookupResult</div>
+        <div class="schema-field"><span class="schema-key">found</span><span class="schema-type">boolean</span><span class="schema-desc">Indica se a ONT foi encontrada</span></div>
+        <div class="schema-field"><span class="schema-key">radUsuario</span><span class="schema-type">IxcRadUsuario?</span><span class="schema-desc">Dados do usuário RADIUS (presente se encontrado no radusuarios)</span></div>
+        <div class="schema-field"><span class="schema-key">ontFibra</span><span class="schema-type">IxcOntFibra?</span><span class="schema-desc">Dados de fibra (presente se encontrado no radpop_radio_cliente_fibra)</span></div>
+        <div class="schema-field"><span class="schema-key">error</span><span class="schema-type">string?</span><span class="schema-desc">Mensagem de erro (presente apenas quando <code>found: false</code>)</span></div>
+      </div>
+    </section>
+
+    <!-- ══ OUTROS ENDPOINTS ═════════════════════════════════════════════════ -->
+    <section class="section" id="outros-crud">
+      <div class="section-title">
+        <div class="icon" style="background:#f8fafc">⚙️</div>
+        CRUD de Integrações
+      </div>
+
+      <div class="endpoint-card">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge GET">GET</span>
+          <span class="endpoint-path">/v1/integrations</span>
+          <span class="endpoint-summary">Listar todas as integrações configuradas</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tab-content active" style="display:block">
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="endpoint-card">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge POST">POST</span>
+          <span class="endpoint-path">/v1/integrations</span>
+          <span class="endpoint-summary">Criar nova integração — requer Admin</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tab-content active" style="display:block">
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button><span class="hl-method">POST</span> <span class="hl-url">/v1/integrations</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...
+<span class="hl-header">Content-Type</span>: application/json
+
+{
+  <span class="hl-key">"name"</span>: <span class="hl-str">"IXC - Produção"</span>,
+  <span class="hl-key">"type"</span>: <span class="hl-str">"ixc"</span>,
+  <span class="hl-key">"enabled"</span>: <span class="hl-bool">true</span>,
+  <span class="hl-key">"config"</span>: {
+    <span class="hl-key">"baseUrl"</span>: <span class="hl-str">"https://suaempresa.ixcsoft.com.br"</span>,
+    <span class="hl-key">"apiKey"</span>: <span class="hl-str">"6:4dacdb8e47193e8cbbabe508c3c59b4547e..."</span>,
+    <span class="hl-key">"authType"</span>: <span class="hl-str">"basic"</span>
+  }
+}</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="endpoint-card">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge GET">GET</span>
+          <span class="endpoint-path">/v1/integrations/adapters</span>
+          <span class="endpoint-summary">Listar adaptadores ERP disponíveis (IXC, Hubsoft, SGP, Voalle...)</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tab-content active" style="display:block">
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button"><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/adapters</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="outros-lookup">
+      <div class="section-title">
+        <div class="icon" style="background:#f8fafc">🔎</div>
+        Lookup Genérico de Cliente no ERP
+      </div>
+      <p class="section-desc">
+        Endpoint genérico que funciona com qualquer ERP configurado (IXC, Hubsoft, SGP, Voalle, etc.).
+        Normaliza a resposta independente do ERP.
+      </p>
+
+      <div class="endpoint-card">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge GET">GET</span>
+          <span class="endpoint-path">/v1/integrations/:id/lookup</span>
+          <span class="endpoint-summary">Buscar cliente no ERP por PPPoE, serial ou CPF</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tab-content active" style="display:block">
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button"><span class="hl-method">GET</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/lookup?pppoe=cliente001</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+
+            <div class="code-label" style="margin-top:16px">Resposta normalizada</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"found"</span>: <span class="hl-bool">true</span>,
+  <span class="hl-key">"normalized"</span>: {
+    <span class="hl-key">"id"</span>: <span class="hl-str">"512"</span>,
+    <span class="hl-key">"name"</span>: <span class="hl-str">"João da Silva"</span>,
+    <span class="hl-key">"cpf"</span>: <span class="hl-str">"123.456.789-00"</span>,
+    <span class="hl-key">"status"</span>: <span class="hl-str">"ativo"</span>,
+    <span class="hl-key">"plan"</span>: <span class="hl-str">"Fibra 300MB"</span>,
+    <span class="hl-key">"address"</span>: <span class="hl-str">"Rua das Flores, 123"</span>,
+    <span class="hl-key">"phone"</span>: <span class="hl-str">"(11) 99999-0000"</span>,
+    <span class="hl-key">"email"</span>: <span class="hl-str">"joao@email.com"</span>,
+    <span class="hl-key">"profileUrl"</span>: <span class="hl-str">"https://suaempresa.ixcsoft.com.br/clientes/512"</span>
+  },
+  <span class="hl-key">"raw"</span>: { <span class="hl-comment">/* resposta bruta do ERP */</span> }
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="outros-actions">
+      <div class="section-title">
+        <div class="icon" style="background:#f8fafc">⚡</div>
+        Ações no ERP
+      </div>
+
+      <div class="endpoint-card">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge POST">POST</span>
+          <span class="endpoint-path">/v1/integrations/:id/actions/:action</span>
+          <span class="endpoint-summary">Executar ação no ERP: suspend, reactivate, open_ticket</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tab-content active" style="display:block">
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button"><span class="hl-method">POST</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/actions/suspend</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...
+<span class="hl-header">Content-Type</span>: application/json
+
+{
+  <span class="hl-key">"customerId"</span>: <span class="hl-str">"512"</span>,
+  <span class="hl-key">"extra"</span>: { <span class="hl-key">"motivo"</span>: <span class="hl-str">"Inadimplência"</span> }
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="outros-test">
+      <div class="section-title">
+        <div class="icon" style="background:#f8fafc">🧪</div>
+        Teste de Conexão
+      </div>
+
+      <div class="endpoint-card">
+        <div class="endpoint-header" onclick="toggleCard(this)">
+          <span class="method-badge POST">POST</span>
+          <span class="endpoint-path">/v1/integrations/:id/test-connection</span>
+          <span class="endpoint-summary">Testar conectividade e autenticação com o ERP</span>
+          <span class="endpoint-chevron">▾</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="tab-content active" style="display:block">
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button"><span class="hl-method">POST</span> <span class="hl-url">/v1/integrations/6847a1b2c3d4e5f6a7b8c9d0/test-connection</span>
+<span class="hl-header">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiJ9...</pre>
+
+            <div class="code-label" style="margin-top:16px">Resposta de sucesso</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">Copiar</button>{
+  <span class="hl-key">"ok"</span>: <span class="hl-bool">true</span>,
+  <span class="hl-key">"statusCode"</span>: <span class="hl-num">200</span>,
+  <span class="hl-key">"message"</span>: <span class="hl-str">"Conexão e autenticação bem-sucedidas"</span>,
+  <span class="hl-key">"latencyMs"</span>: <span class="hl-num">142</span>
+}</pre>
+
+            <div class="alert alert-success" style="margin-top:12px">
+              <span class="alert-icon">✅</span>
+              <div>O resultado do teste é registrado automaticamente nos Logs do BR10ACS (categoria INTEGRATION),
+              visível na tela de Logs do painel.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /content -->
+</main><!-- /main -->
+
+<script>
+  function toggleCard(header) {
+    const card = header.closest('.endpoint-card');
+    card.classList.toggle('open');
+  }
+
+  function switchTab(tab, contentId) {
+    const body = tab.closest('.endpoint-body');
+    body.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    body.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    const content = document.getElementById(contentId);
+    if (content) content.classList.add('active');
+  }
+
+  function copyCode(btn) {
+    const pre = btn.closest('pre');
+    const text = pre.innerText.replace('Copiar', '').trim();
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copiado!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  // Highlight nav item on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navItems = document.querySelectorAll('.nav-item');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navItems.forEach(item => item.classList.remove('active'));
+        const active = document.querySelector(`.nav-item[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
