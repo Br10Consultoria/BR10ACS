@@ -2,7 +2,8 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   HardDrive, Upload, Trash2, FileCode, FolderOpen, Folder,
-  ChevronRight, ChevronDown, Plus, X, Search, Filter,
+  ChevronRight, ChevronDown, Plus, X, Search, Filter, Server, Radio,
+  Router, Box,
 } from 'lucide-react'
 import { filesApi } from '@/api'
 import { Card, CardContent, Badge } from '@/components/ui'
@@ -17,31 +18,67 @@ const FILE_TYPES = [
   { value: '5 Ringer File', label: 'Ringer File — 5 Ringer File' },
 ]
 
-// ── Vendors conhecidos (OLT e ONT) ────────────────────────────────────────────
+// ── Fabricantes suportados ────────────────────────────────────────────────────
 const VENDORS = [
-  { id: 'intelbras', label: 'Intelbras', color: 'bg-blue-100 text-blue-700' },
-  { id: 'huawei', label: 'Huawei', color: 'bg-red-100 text-red-700' },
-  { id: 'zte', label: 'ZTE', color: 'bg-green-100 text-green-700' },
-  { id: 'nokia', label: 'Nokia', color: 'bg-indigo-100 text-indigo-700' },
-  { id: 'fiberhome', label: 'FiberHome', color: 'bg-orange-100 text-orange-700' },
-  { id: 'vsol', label: 'VSOL', color: 'bg-purple-100 text-purple-700' },
-  { id: 'tplink', label: 'TP-Link', color: 'bg-cyan-100 text-cyan-700' },
-  { id: 'datacom', label: 'Datacom', color: 'bg-teal-100 text-teal-700' },
-  { id: 'parks', label: 'Parks', color: 'bg-yellow-100 text-yellow-700' },
-  { id: 'outros', label: 'Outros', color: 'bg-slate-100 text-slate-600' },
+  { id: 'intelbras', label: 'Intelbras', color: 'bg-blue-100 text-blue-700', abbr: 'IN' },
+  { id: 'huawei',    label: 'Huawei',    color: 'bg-red-100 text-red-700',   abbr: 'HW' },
+  { id: 'zte',       label: 'ZTE',       color: 'bg-green-100 text-green-700', abbr: 'ZT' },
+  { id: 'nokia',     label: 'Nokia',     color: 'bg-indigo-100 text-indigo-700', abbr: 'NK' },
+  { id: 'fiberhome', label: 'FiberHome', color: 'bg-orange-100 text-orange-700', abbr: 'FH' },
+  { id: 'vsol',      label: 'VSOL',      color: 'bg-purple-100 text-purple-700', abbr: 'VS' },
+  { id: 'tplink',    label: 'TP-Link',   color: 'bg-cyan-100 text-cyan-700',  abbr: 'TP' },
+  { id: 'datacom',   label: 'Datacom',   color: 'bg-teal-100 text-teal-700',  abbr: 'DC' },
+  { id: 'parks',     label: 'Parks',     color: 'bg-yellow-100 text-yellow-700', abbr: 'PK' },
+  { id: 'outros',    label: 'Outros',    color: 'bg-slate-100 text-slate-600', abbr: 'OU' },
 ]
 
+// ── Tipos de equipamento (segundo nível da árvore) ────────────────────────────
+const EQUIP_TYPES = [
+  { id: 'olt',    label: 'OLT',    icon: Server,  color: 'text-red-500',    hint: 'Optical Line Terminal' },
+  { id: 'ont',    label: 'ONT',    icon: Radio,   color: 'text-blue-500',   hint: 'Optical Network Terminal' },
+  { id: 'router', label: 'Router', icon: Router,  color: 'text-green-500',  hint: 'Roteador / CPE' },
+  { id: 'outros', label: 'Outros', icon: Box,     color: 'text-slate-400',  hint: 'Outros equipamentos' },
+]
+
+// ── Detecção automática de vendor e tipo ─────────────────────────────────────
 function detectVendor(filename: string): string {
-  const lower = filename.toLowerCase()
-  if (lower.includes('intelbras') || lower.includes('itbs') || lower.includes('1200r') || lower.includes('1400r') || lower.includes('gpon')) return 'intelbras'
-  if (lower.includes('huawei') || lower.includes('hwtc') || lower.includes('eg8') || lower.includes('hg8')) return 'huawei'
-  if (lower.includes('zte') || lower.includes('f660') || lower.includes('f670') || lower.includes('f680')) return 'zte'
-  if (lower.includes('nokia') || lower.includes('alcatel') || lower.includes('g-240') || lower.includes('g240')) return 'nokia'
-  if (lower.includes('fiberhome') || lower.includes('fiber') || lower.includes('an5506')) return 'fiberhome'
-  if (lower.includes('vsol') || lower.includes('v2801') || lower.includes('v2802')) return 'vsol'
-  if (lower.includes('tplink') || lower.includes('tp-link') || lower.includes('archer')) return 'tplink'
-  if (lower.includes('datacom') || lower.includes('dm')) return 'datacom'
-  if (lower.includes('parks')) return 'parks'
+  const l = filename.toLowerCase()
+  if (l.includes('intelbras') || l.includes('itbs') || l.includes('1200r') || l.includes('1400r') || l.includes('gpon')) return 'intelbras'
+  if (l.includes('huawei') || l.includes('hwtc') || l.includes('eg8') || l.includes('hg8') || l.includes('ma5')) return 'huawei'
+  if (l.includes('zte') || l.includes('f660') || l.includes('f670') || l.includes('f680') || l.includes('c300') || l.includes('c320')) return 'zte'
+  if (l.includes('nokia') || l.includes('alcatel') || l.includes('g-240') || l.includes('g240') || l.includes('isam')) return 'nokia'
+  if (l.includes('fiberhome') || l.includes('fiber') || l.includes('an5506') || l.includes('an6000')) return 'fiberhome'
+  if (l.includes('vsol') || l.includes('v2801') || l.includes('v2802') || l.includes('v1600')) return 'vsol'
+  if (l.includes('tplink') || l.includes('tp-link') || l.includes('archer')) return 'tplink'
+  if (l.includes('datacom') || l.includes('dm')) return 'datacom'
+  if (l.includes('parks')) return 'parks'
+  return 'outros'
+}
+
+function detectEquipType(filename: string, vendor: string): string {
+  const l = filename.toLowerCase()
+  // OLTs: equipamentos de central
+  if (
+    l.includes('olt') || l.includes('ma5800') || l.includes('ma5600') || l.includes('ma5683') ||
+    l.includes('c300') || l.includes('c320') || l.includes('c600') || l.includes('an6000') ||
+    l.includes('isam') || l.includes('7342') || l.includes('7360') || l.includes('dm4610') ||
+    l.includes('dm4612') || l.includes('parks') || l.includes('v1600')
+  ) return 'olt'
+  // ONTs: equipamentos de cliente óptico
+  if (
+    l.includes('ont') || l.includes('onu') || l.includes('hg8') || l.includes('eg8') ||
+    l.includes('f660') || l.includes('f670') || l.includes('f680') || l.includes('g-240') ||
+    l.includes('g240') || l.includes('an5506') || l.includes('v2801') || l.includes('v2802') ||
+    l.includes('itbs') || l.includes('1200r') || l.includes('1400r') || l.includes('gpon')
+  ) return 'ont'
+  // Roteadores
+  if (
+    l.includes('router') || l.includes('roteador') || l.includes('archer') || l.includes('tplink') ||
+    l.includes('tp-link') || l.includes('ax') || l.includes('ac') || l.includes('wifi')
+  ) return 'router'
+  // Fallback por vendor
+  if (vendor === 'tplink') return 'router'
+  if (['intelbras', 'huawei', 'zte', 'nokia', 'fiberhome', 'vsol', 'datacom', 'parks'].includes(vendor)) return 'ont'
   return 'outros'
 }
 
@@ -56,20 +93,107 @@ interface GenieFile {
   _id: string
   length?: number
   uploadDate?: string
-  metadata?: { fileType?: string; vendor?: string; model?: string; version?: string }
+  metadata?: { fileType?: string; vendor?: string; equipType?: string; model?: string; version?: string }
 }
 
+// ── Componente de linha de arquivo ────────────────────────────────────────────
+function FileRow({ f, onDelete }: { f: GenieFile; onDelete: (id: string) => void }) {
+  return (
+    <tr className="border-t border-slate-50 hover:bg-slate-50 transition-colors">
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <FileCode className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <span className="font-mono text-xs text-slate-700 break-all">{f._id}</span>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-slate-500 text-xs hidden md:table-cell">
+        {f.metadata?.model || <span className="text-slate-300">—</span>}
+      </td>
+      <td className="px-4 py-3 hidden md:table-cell">
+        {f.metadata?.version
+          ? <Badge variant="blue">{f.metadata.version}</Badge>
+          : <span className="text-slate-300 text-xs">—</span>}
+      </td>
+      <td className="px-4 py-3 text-slate-500 text-xs">
+        {f.metadata?.fileType ? f.metadata.fileType.split(' ').slice(0, 2).join(' ') : '—'}
+      </td>
+      <td className="px-4 py-3 text-slate-500 text-xs hidden sm:table-cell">{formatBytes(f.length)}</td>
+      <td className="px-4 py-3 text-slate-400 text-xs hidden lg:table-cell">
+        {f.uploadDate ? new Date(f.uploadDate).toLocaleString('pt-BR') : '—'}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <button
+          onClick={() => onDelete(f._id)}
+          className="text-red-400 hover:text-red-600 p-1 rounded transition-colors"
+          title="Remover"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+// ── Componente de subpasta (segundo nível: OLT/ONT/Router/Outros) ─────────────
+function EquipTypeFolder({
+  equipType, files, onDelete,
+}: { equipType: typeof EQUIP_TYPES[0]; files: GenieFile[]; onDelete: (id: string) => void }) {
+  const [open, setOpen] = useState(true)
+  const EtIcon = equipType.icon
+  if (files.length === 0) return null
+  return (
+    <div className="ml-6 border-l-2 border-slate-100 mb-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-left"
+      >
+        {open
+          ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+        <EtIcon className={`w-4 h-4 ${equipType.color}`} />
+        <span className="text-sm font-medium text-slate-700">{equipType.label}</span>
+        <span className="text-xs text-slate-400 ml-1">— {equipType.hint}</span>
+        <span className="ml-auto text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+          {files.length}
+        </span>
+      </button>
+      {open && (
+        <div className="ml-4 border-t border-slate-100">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Arquivo</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Modelo</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Versão</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Tamanho</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Upload</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {files.map(f => <FileRow key={f._id} f={f} onDelete={onDelete} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Página principal ──────────────────────────────────────────────────────────
 export default function FilesPage() {
   const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [fileType, setFileType] = useState(FILE_TYPES[0].value)
   const [uploading, setUploading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
-  const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set(['intelbras']))
+  const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set(['intelbras', 'huawei', 'zte']))
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [metaVendor, setMetaVendor] = useState('intelbras')
+  const [metaEquipType, setMetaEquipType] = useState('ont')
   const [metaModel, setMetaModel] = useState('')
   const [metaVersion, setMetaVersion] = useState('')
 
@@ -93,11 +217,14 @@ export default function FilesPage() {
     return matchSearch && matchType
   })
 
-  const byVendor: Record<string, GenieFile[]> = {}
+  // Estrutura: { vendor: { equipType: GenieFile[] } }
+  const tree: Record<string, Record<string, GenieFile[]>> = {}
   for (const f of filtered) {
     const v = f.metadata?.vendor || detectVendor(f._id)
-    if (!byVendor[v]) byVendor[v] = []
-    byVendor[v].push(f)
+    const et = f.metadata?.equipType || detectEquipType(f._id, v)
+    if (!tree[v]) tree[v] = {}
+    if (!tree[v][et]) tree[v][et] = []
+    tree[v][et].push(f)
   }
 
   const toggleVendor = (id: string) => {
@@ -113,7 +240,9 @@ export default function FilesPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setPendingFile(file)
-    setMetaVendor(detectVendor(file.name))
+    const vendor = detectVendor(file.name)
+    setMetaVendor(vendor)
+    setMetaEquipType(detectEquipType(file.name, vendor))
     const versionMatch = file.name.match(/[\d]+[._-][\d]+[._-][\d]+/)
     setMetaVersion(versionMatch ? versionMatch[0].replace(/_/g, '.') : '')
     setMetaModel('')
@@ -126,6 +255,7 @@ export default function FilesPage() {
       const formData = new FormData()
       formData.append('file', pendingFile)
       formData.append('vendor', metaVendor)
+      formData.append('equipType', metaEquipType)
       formData.append('model', metaModel)
       formData.append('version', metaVersion)
       await filesApi.uploadFile(formData, fileType)
@@ -147,7 +277,9 @@ export default function FilesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Arquivos de Firmware</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Organize firmwares de OLTs e ONTs por fabricante</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Organizado por <strong>Fabricante → Tipo de Equipamento</strong> (OLT / ONT / Router)
+          </p>
         </div>
         <button
           onClick={() => setShowUpload(true)}
@@ -204,18 +336,35 @@ export default function FilesPage() {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1 font-medium">Fabricante / Vendor</label>
-                  <select
-                    value={metaVendor}
-                    onChange={(e) => setMetaVendor(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {VENDORS.map(v => (
-                      <option key={v.id} value={v.id}>{v.label}</option>
-                    ))}
-                  </select>
+
+                {/* Fabricante + Tipo de Equipamento */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1 font-medium">Fabricante</label>
+                    <select
+                      value={metaVendor}
+                      onChange={(e) => setMetaVendor(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {VENDORS.map(v => (
+                        <option key={v.id} value={v.id}>{v.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1 font-medium">Tipo de Equipamento</label>
+                    <select
+                      value={metaEquipType}
+                      onChange={(e) => setMetaEquipType(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {EQUIP_TYPES.map(et => (
+                        <option key={et.id} value={et.id}>{et.label} — {et.hint}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-slate-500 mb-1 font-medium">Modelo (ex: 1200R)</label>
@@ -238,6 +387,7 @@ export default function FilesPage() {
                     />
                   </div>
                 </div>
+
                 <button
                   onClick={handleUpload}
                   disabled={uploading}
@@ -286,10 +436,10 @@ export default function FilesPage() {
         </CardContent>
       </Card>
 
-      {/* Estatísticas rápidas por vendor */}
+      {/* Estatísticas rápidas */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {VENDORS.slice(0, 5).map(v => {
-          const count = (byVendor[v.id] || []).length
+          const count = Object.values(tree[v.id] || {}).flat().length
           return (
             <button
               key={v.id}
@@ -297,7 +447,7 @@ export default function FilesPage() {
               className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:shadow-sm transition-all text-left"
             >
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${v.color}`}>
-                {v.label.slice(0, 2).toUpperCase()}
+                {v.abbr}
               </div>
               <div>
                 <div className="text-xs text-slate-500">{v.label}</div>
@@ -308,99 +458,70 @@ export default function FilesPage() {
         })}
       </div>
 
-      {/* Diretórios por vendor */}
+      {/* Árvore de arquivos: Fabricante → Tipo de Equipamento → Arquivos */}
       {isLoading ? (
-        <Card><CardContent><div className="text-center py-12 text-slate-400">Carregando arquivos...</div></CardContent></Card>
+        <div className="text-center py-12 text-slate-400 text-sm">Carregando arquivos...</div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent>
-            <div className="text-center py-16 text-slate-400">
-              <HardDrive className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p className="font-medium">Nenhum arquivo encontrado</p>
-              <p className="text-xs mt-1">Use o botão "Novo Arquivo" para fazer upload</p>
-            </div>
+          <CardContent className="py-16 text-center">
+            <HardDrive className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+            <p className="text-slate-500 font-medium">Nenhum arquivo encontrado</p>
+            <p className="text-xs text-slate-400 mt-1">Faça upload de firmwares para gerenciar atualizações via TR-069</p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
           {VENDORS.map(vendor => {
-            const vendorFiles = byVendor[vendor.id] || []
-            if (vendorFiles.length === 0) return null
+            const vendorTree = tree[vendor.id]
+            if (!vendorTree) return null
+            const totalFiles = Object.values(vendorTree).flat().length
+            if (totalFiles === 0) return null
             const isExpanded = expandedVendors.has(vendor.id)
+
             return (
-              <Card key={vendor.id}>
+              <Card key={vendor.id} className="overflow-hidden">
+                {/* Cabeçalho do fabricante (nível 1) */}
                 <button
                   onClick={() => toggleVendor(vendor.id)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors rounded-t-xl"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors"
                 >
                   {isExpanded
                     ? <ChevronDown className="w-4 h-4 text-slate-400" />
-                    : <ChevronRight className="w-4 h-4 text-slate-400" />
-                  }
+                    : <ChevronRight className="w-4 h-4 text-slate-400" />}
                   {isExpanded
                     ? <FolderOpen className="w-5 h-5 text-amber-500" />
-                    : <Folder className="w-5 h-5 text-amber-400" />
-                  }
-                  <span className="font-semibold text-slate-700 text-sm">{vendor.label}</span>
+                    : <Folder className="w-5 h-5 text-amber-400" />}
+                  <span className="font-semibold text-slate-700">{vendor.label}</span>
                   <span className={`ml-1 text-xs px-2 py-0.5 rounded-full font-medium ${vendor.color}`}>
-                    {vendorFiles.length} {vendorFiles.length === 1 ? 'arquivo' : 'arquivos'}
+                    {totalFiles} {totalFiles === 1 ? 'arquivo' : 'arquivos'}
                   </span>
+                  {/* Badges de subtipos */}
+                  <div className="ml-auto flex gap-1.5">
+                    {EQUIP_TYPES.map(et => {
+                      const count = (vendorTree[et.id] || []).length
+                      if (count === 0) return null
+                      const EtIcon = et.icon
+                      return (
+                        <span key={et.id} className="flex items-center gap-1 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                          <EtIcon className={`w-3 h-3 ${et.color}`} />
+                          {et.label} {count}
+                        </span>
+                      )
+                    })}
+                  </div>
                 </button>
+
+                {/* Subpastas por tipo de equipamento (nível 2) */}
                 {isExpanded && (
-                  <div className="border-t border-slate-100">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-slate-50">
-                          <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Arquivo</th>
-                          <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Modelo</th>
-                          <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Versão</th>
-                          <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo</th>
-                          <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Tamanho</th>
-                          <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Upload</th>
-                          <th className="px-4 py-2" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {vendorFiles.map((f) => (
-                          <tr key={f._id} className="border-t border-slate-50 hover:bg-slate-50 transition-colors">
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <FileCode className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                                <span className="font-mono text-xs text-slate-700 break-all">{f._id}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 text-xs hidden md:table-cell">
-                              {f.metadata?.model || <span className="text-slate-300">—</span>}
-                            </td>
-                            <td className="px-4 py-3 hidden md:table-cell">
-                              {f.metadata?.version
-                                ? <Badge variant="blue">{f.metadata.version}</Badge>
-                                : <span className="text-slate-300 text-xs">—</span>
-                              }
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 text-xs">
-                              {f.metadata?.fileType
-                                ? f.metadata.fileType.split(' ').slice(0, 2).join(' ')
-                                : '—'}
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 text-xs hidden sm:table-cell">{formatBytes(f.length)}</td>
-                            <td className="px-4 py-3 text-slate-400 text-xs hidden lg:table-cell">
-                              {f.uploadDate ? new Date(f.uploadDate).toLocaleString('pt-BR') : '—'}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <button
-                                onClick={() => deleteMut.mutate(f._id)}
-                                disabled={deleteMut.isPending}
-                                className="text-red-400 hover:text-red-600 p-1 rounded transition-colors"
-                                title="Remover"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="border-t border-slate-100 py-2">
+                    {EQUIP_TYPES.map(et => (
+                      <EquipTypeFolder
+                        key={et.id}
+                        equipType={et}
+                        files={vendorTree[et.id] || []}
+                        onDelete={(id) => deleteMut.mutate(id)}
+                      />
+                    ))}
                   </div>
                 )}
               </Card>

@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import axios from 'axios';
 import { Alert, AlertDocument, AlertType, AlertSeverity } from './schemas/alert.schema';
+import { SettingsService } from '../settings/settings.service';
 
 export interface AlertCreateDto {
   deviceId: string;
@@ -26,6 +27,7 @@ export class AlertsService {
 
   constructor(
     @InjectModel(Alert.name) private alertModel: Model<AlertDocument>,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async create(dto: AlertCreateDto): Promise<AlertDocument> {
@@ -182,9 +184,9 @@ export class AlertsService {
   }
 
   private async sendTelegram(alert: AlertDocument): Promise<void> {
-    // Busca configuração do Telegram no banco via variável de ambiente
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_CHAT_ID;
+    // Busca configuração do Telegram do banco (Settings) com fallback para env
+    const botToken = await this.settingsService.get('notifications.telegram.botToken') as string || process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = await this.settingsService.get('notifications.telegram.chatId') as string || process.env.TELEGRAM_CHAT_ID;
     if (!botToken || !chatId) return;
 
     const emoji = alert.severity === AlertSeverity.CRITICAL ? '🔴' :
@@ -204,7 +206,7 @@ export class AlertsService {
   }
 
   private async sendWebhook(alert: AlertDocument): Promise<void> {
-    const webhookUrl = process.env.ALERT_WEBHOOK_URL;
+    const webhookUrl = await this.settingsService.get('notifications.webhook.url') as string || process.env.ALERT_WEBHOOK_URL;
     if (!webhookUrl) return;
 
     const payload = {

@@ -253,5 +253,22 @@ export const ERP_ADAPTERS: Record<string, ErpAdapter> = {
       plan: 'plano',
       idField: 'id',
     },
+    actionEndpoints: {
+      suspend: {
+        method: 'POST',
+        path: '/api/clientes/{id}/suspender',
+        bodyTemplate: {},
+      },
+      reactivate: {
+        method: 'POST',
+        path: '/api/clientes/{id}/reativar',
+        bodyTemplate: {},
+      },
+      open_ticket: {
+        method: 'POST',
+        path: '/api/os',
+        bodyTemplate: { cliente_id: '{id}', tipo: 'suporte', descricao: 'Chamado aberto via BR10ACS' },
+      },
+    },
   },
 };

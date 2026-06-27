@@ -45,11 +45,21 @@ const sections = [
     ] as SettingField[],
   },
   {
-    title: 'Notificações',
+    title: 'Notificações — Telegram',
     icon: Bell,
     fields: [
-      { key: 'notifications.offlineAlert', label: 'Alerta de dispositivo offline', type: 'toggle' },
-      { key: 'notifications.webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://...' },
+      { key: 'notifications.telegram.enabled', label: 'Habilitar Telegram', type: 'toggle', hint: 'Envia alertas críticos via bot do Telegram' },
+      { key: 'notifications.telegram.botToken', label: 'Bot Token', type: 'password', placeholder: '123456:ABC-DEF...', hint: 'Obtenha com @BotFather no Telegram' },
+      { key: 'notifications.telegram.chatId', label: 'Chat ID', type: 'text', placeholder: '-100123456789', hint: 'ID do grupo ou canal que receberá os alertas' },
+    ] as SettingField[],
+  },
+  {
+    title: 'Notificações — Webhook',
+    icon: Bell,
+    fields: [
+      { key: 'notifications.webhook.enabled', label: 'Habilitar Webhook', type: 'toggle', hint: 'Envia alertas como JSON para uma URL externa (Slack, N8N, Make, etc.)' },
+      { key: 'notifications.webhook.url', label: 'URL do Webhook', type: 'text', placeholder: 'https://hooks.slack.com/...', hint: 'Endpoint que receberá o payload JSON do alerta' },
+      { key: 'notifications.webhook.secret', label: 'Secret (opcional)', type: 'password', placeholder: 'meu-secret', hint: 'Enviado no header X-BR10ACS-Secret para validação' },
     ] as SettingField[],
   },
 ]
