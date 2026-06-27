@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import toast from 'react-hot-toast'
 import {
   Plus, RefreshCw, Zap, Settings2, Cpu, Tag, Code2, AlertTriangle,
   ChevronRight, ChevronDown, Edit2, Trash2, ToggleLeft, ToggleRight,

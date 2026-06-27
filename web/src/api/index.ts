@@ -19,8 +19,8 @@ export const devicesApi = {
   reboot: (id: string) => api.post(`/devices/${id}/reboot`),
   factoryReset: (id: string) => api.post(`/devices/${id}/factory-reset`),
   connectionRequest: (id: string) => api.post(`/devices/${id}/connection-request`),
-  setParam: (id: string, name: string, value: string) =>
-    api.post(`/devices/${id}/set-param`, { name, value }),
+  setParam: (id: string, name: string, value: string, type = 'xsd:string') =>
+    api.post(`/devices/${id}/parameters`, { params: [{ name, value, type }] }),
   timeseries: (id: string, metric: string, hours = 24) =>
     api.get(`/devices/${id}/timeseries`, { params: { metric, hours } }),
   diagnostics: (id: string, type: string, params?: Record<string, unknown>) =>

@@ -313,7 +313,7 @@ function IntegrationWizard({ onClose, onSuccess }: WizardProps) {
 
 // ── Painel de Lookup ──────────────────────────────────────────────────────────
 
-const AUTH_ICONS: Record<string, React.ReactNode> = {
+const AUTH_ICONS: Record<string, JSX.Element> = {
   apikey_header: <Key className="w-3 h-3" />,
   bearer:        <Shield className="w-3 h-3" />,
   basic:         <Key className="w-3 h-3" />,

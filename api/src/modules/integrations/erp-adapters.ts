@@ -91,7 +91,7 @@ export const ERP_ADAPTERS: Record<string, ErpAdapter> = {
       idField: 'id',
       profileUrl: '/index.php?modulo=clientes&acao=visualizar&id={id}',
     },
-    docsUrl: 'https://wiki.ixcsoft.com.br/api',
+    docsUrl: 'https://wiki.ixcsoft.com.br/index.php/API_IXC_Soft',
   },
 
   mkauth: {

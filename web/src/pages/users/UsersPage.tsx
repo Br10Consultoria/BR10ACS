@@ -126,8 +126,8 @@ export default function UsersPage() {
                       </div>
                     </Td>
                     <Td>
-                      <Badge variant={(user.isActive as boolean) ? 'green' : 'red'}>
-                        {(user.isActive as boolean) ? 'Ativo' : 'Inativo'}
+                      <Badge variant={(user.status as string) === 'active' ? 'green' : 'red'}>
+                        {(user.status as string) === 'active' ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </Td>
                     <Td className="text-slate-500 text-xs">

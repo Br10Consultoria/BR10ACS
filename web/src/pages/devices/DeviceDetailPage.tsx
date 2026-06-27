@@ -1024,12 +1024,21 @@ function WifiTab({ deviceId, device }: { deviceId: string; device: Record<string
       qc.invalidateQueries({ queryKey: ['device', deviceId] })
       setEditing(null)
     },
-    onError: () => toast.error('Falha ao enviar parâmetro'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Falha ao enviar parâmetro. Verifique se o dispositivo está online.')
+    },
   })
 
   const applyWifi = (net: Record<string, unknown>, idx: number) => {
-    // Paths TR-069 padrão para SSID e senha
-    const base = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx + 1}`
+    // Tenta TR-098 primeiro, fallback para TR-181
+    const manufacturer = ((device as Record<string, unknown>)?.manufacturer as string || '').toLowerCase()
+    let base: string
+    if (manufacturer.includes('huawei') || manufacturer.includes('nokia') || manufacturer.includes('fiberhome')) {
+      base = `Device.WiFi.SSID.${idx + 1}`
+    } else {
+      base = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx + 1}`
+    }
     if (editSsid && editSsid !== (net.ssid as string)) {
       setParamMutation.mutate({ name: `${base}.SSID`, value: editSsid })
     }
