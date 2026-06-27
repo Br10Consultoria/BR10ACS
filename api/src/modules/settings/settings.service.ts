@@ -18,6 +18,8 @@ const DEFAULT_SETTINGS = [
   { key: 'auth.maxLoginAttempts', value: 5, description: 'Máximo de tentativas de login' },
   { key: 'notifications.email.enabled', value: false, description: 'Habilitar notificações por e-mail' },
   { key: 'notifications.email.smtp', value: '', description: 'Servidor SMTP', isSecret: true },
+  { key: 'openai.apiKey', value: '', description: 'Chave de API da OpenAI para diagnóstico IA', isSecret: true },
+  { key: 'openai.baseUrl', value: '', description: 'URL base da API OpenAI (deixe vazio para usar o padrão)' },
 ];
 
 @Injectable()

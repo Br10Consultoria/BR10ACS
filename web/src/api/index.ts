@@ -113,7 +113,15 @@ export const filesApi = {
     api.delete(`/files/${encodeURIComponent(fileName)}`),
 }
 
-// ── Export ────────────────────────────────────────────────────────────────────
+// ── AI Config ───────────────────────────────────────────────────────────────────
+export const aiConfigApi = {
+  status: () => api.get('/ai/status'),
+  getConfig: () => api.get('/ai/config'),
+  saveConfig: (apiKey: string, baseUrl?: string) =>
+    api.put('/ai/config', { apiKey, baseUrl }),
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────────────────────
 const downloadBlob = async (url: string, filename: string) => {
   const token = localStorage.getItem('token')
   const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })

@@ -1,0 +1,121 @@
+# BR10ACS — Documentação Técnica
+
+O **BR10ACS** é uma plataforma moderna de Auto Configuration Server (ACS) construída para gerenciar dispositivos TR-069 (CPEs, ONTs, roteadores) em provedores de internet (ISPs). Ele atua como uma camada inteligente sobre o GenieACS, oferecendo uma interface web moderna, integrações com ERPs, diagnóstico com IA, e automações avançadas.
+
+## 1. Arquitetura do Sistema
+
+O sistema utiliza uma arquitetura moderna baseada em containers Docker, separando o backend, frontend e os serviços do GenieACS.
+
+### Stack Tecnológica
+* **Backend:** Node.js, TypeScript, NestJS
+* **Frontend:** React, Vite, TailwindCSS, React Query, Recharts
+* **Banco de Dados:** MongoDB (armazena logs, histórico, configurações, integrações e alertas)
+* **Cache/Filas:** Redis
+* **Core TR-069:** GenieACS (NBI, CWMP, FS)
+* **Proxy/Web Server:** Nginx
+
+O BR10ACS **não acessa o banco de dados do GenieACS diretamente**. Toda a comunicação com o GenieACS é feita de forma segura através da sua API REST (NBI).
+
+---
+
+## 2. Módulos Principais do Backend
+
+O backend (NestJS) é dividido em módulos com responsabilidades únicas:
+
+### 2.1. Devices & Device Normalizer (`/devices`)
+Gerencia a listagem, busca e interação com as CPEs.
+* **DeviceNormalizer:** Traduz a árvore complexa de parâmetros TR-069 (TR-098 e TR-181) para um objeto padronizado, lidando com diferenças entre fabricantes (Intelbras, ZTE, Huawei, Nokia, etc.).
+
+### 2.2. Collector & TimeSeries (`/collector`)
+Serviço executado em background (via `setInterval` a cada 5 minutos) que varre todos os dispositivos online.
+* **Função:** Coleta nível de sinal (RX/TX), temperatura, voltagem, bytes trafegados (WAN), uptime e quantidade de hosts.
+* **Armazenamento:** Grava os dados na coleção `timeseries` no MongoDB.
+* **Gráficos:** Esses dados são usados para renderizar os gráficos de histórico de sinal e banda consumida na interface.
+* **Alertas:** Se o sinal óptico estiver fora da faixa aceitável ou o dispositivo ficar offline, o coletor gera um alerta no sistema.
+
+### 2.3. AutoConfig (`/autoconfig`)
+Sistema de provisionamento inteligente e dinâmico.
+* Permite criar regras condicionais (ex: "Se OUI for X e Modelo for Y").
+* Quando um dispositivo atende às condições, o sistema aplica parâmetros TR-069 específicos ou adiciona Tags automaticamente.
+* Roda de forma passiva (quando um dispositivo faz Inform) e ativa (via cron job de hora em hora).
+
+### 2.4. Presets & Provisions (`/presets`)
+Interface direta para a engine nativa do GenieACS.
+* Permite gerenciar scripts de provisionamento e regras de presets do próprio GenieACS diretamente pela interface do BR10ACS.
+* O método `applyTemplate` cria automaticamente os scripts base necessários para coleta de dados de novas ONTs.
+
+### 2.5. Integrações ERP (`/integrations`)
+Conecta o BR10ACS aos sistemas de gestão do provedor.
+* **Adaptadores Suportados:** IXC Soft, SGP, MK-Auth, Hubsoft, Leaf, Spify e Custom.
+* **Fluxo:** Quando ativada, a integração permite buscar os dados do cliente (Nome, Plano, Status Financeiro) diretamente no ERP usando o PPPoE, Serial ou CPF da CPE, exibindo as informações na aba "Cliente ERP" do dispositivo.
+
+### 2.6. Diagnósticos & IA (`/diagnostics`)
+Módulo responsável por testes ativos e análise inteligente.
+* **Testes Ativos:** Executa Ping e Traceroute via TR-069, suportando tanto o path TR-098 (`InternetGatewayDevice.TraceRouteDiagnostics`) quanto TR-181 (`Device.IP.Diagnostics.TraceRoute`).
+* **Análise IA:** Integra-se com a API da OpenAI (GPT-4o-mini). O sistema envia os parâmetros brutos da CPE, histórico de sinal e logs recentes para a IA, que devolve um diagnóstico estruturado com problemas identificados, severidade, causa provável e recomendações de ação.
+
+### 2.7. Logs (`/logs`)
+Registra todas as ações executadas no sistema.
+* Captura reboots, reset de fábrica, alterações de Wi-Fi, operações em massa e execuções do AutoConfig.
+* Os logs são categorizados e vinculados ao `deviceId` para exibição no histórico individual de cada CPE.
+
+---
+
+## 3. Funcionalidades do Frontend
+
+A interface web foi desenhada para ser rápida, responsiva e focada na operação de telecomunicações.
+
+### Dashboard
+* Visão geral da rede com contadores de dispositivos online/offline.
+* Gráficos de distribuição por fabricante.
+* **Relatório de Intervenções Recentes:** Lista as últimas ações críticas realizadas nos dispositivos (reboot, alteração de senha, firmware).
+
+### Detalhes do Dispositivo
+A tela principal de operação técnica, dividida em abas:
+1. **Informações:** Resumo do dispositivo, uptime, IP, e painel de tráfego total (com mini-gráfico de banda).
+2. **Sinal:** Níveis ópticos (RX/TX, Voltagem, Temperatura) e gráficos históricos de Sinal e Banda Consumida (calculada pelo delta de bytes do timeseries).
+3. **Wi-Fi:** Listagem das redes 2.4GHz e 5GHz, com opção de filtrar apenas redes ativas, visualizar senhas e alterar configurações.
+4. **Hosts:** Lista de dispositivos conectados à LAN/WLAN da CPE.
+5. **Diagnóstico:** Execução de Ping, Traceroute, Speedtest (TR-069) e botão para Análise IA individual.
+6. **Histórico:** Log de eventos específicos daquele dispositivo.
+7. **Cliente ERP:** Dados do assinante buscados em tempo real na integração ativa.
+
+### Análise IA (Lote)
+* Página dedicada para analisar múltiplas ONTs de uma só vez.
+* Permite filtrar dispositivos online/offline.
+* Exibe um painel de configuração nativo para inserir a API Key da OpenAI, que é salva criptografada no banco de dados e recarrega o serviço instantaneamente sem necessidade de reiniciar containers.
+
+### Operações em Massa (Mass Ops)
+* Permite selecionar múltiplos dispositivos (por fabricante, tag, status) e agendar tarefas em lote, como Reboot, Factory Reset ou envio de comandos TR-069.
+
+---
+
+## 4. Fluxos de Dados e Comportamentos Importantes
+
+### Como o Gráfico de Banda Funciona
+O GenieACS não armazena histórico. O BR10ACS resolve isso com o serviço `Collector`.
+1. A cada 5 minutos, o Collector lê o `TotalBytesReceived` e `TotalBytesSent` da CPE.
+2. Esses valores são gravados no MongoDB (`timeseries`).
+3. O frontend lê essa série temporal e calcula a diferença (delta) de bytes entre o ponto atual e o anterior.
+4. O delta é dividido pelo tempo (5 minutos) para gerar a taxa em **Mbps**, que é exibida no gráfico de área na aba Sinal.
+
+### Como a IA analisa a CPE
+1. O usuário clica em "Analisar com IA".
+2. O backend coleta: parâmetros atuais da CPE, últimos 10 pontos de sinal óptico, e últimos 5 logs de eventos.
+3. Esses dados são formatados em um prompt JSON e enviados para a OpenAI.
+4. A IA avalia limites físicos (ex: RX < -27dBm é ruim), quedas de link e alterações recentes.
+5. A resposta retorna em formato estruturado (JSON) e é renderizada na interface com badges de severidade e ações recomendadas.
+
+### Como configurar a IA
+1. Acesse o menu lateral **Diagnóstico IA**.
+2. Clique no botão **Configurar IA** (ícone de engrenagem).
+3. Insira sua `API Key` da OpenAI (ex: `sk-proj-...`).
+4. Clique em Salvar. A chave será gravada no MongoDB (`settings`) e o cliente interno será recarregado automaticamente.
+
+---
+
+## 5. Manutenção e Troubleshooting
+
+* **Logs do Sistema:** A página "Logs do Sistema" exibe todos os eventos. Filtre por "Aviso" ou "Erro" para diagnosticar falhas no AutoConfig ou Operações em Massa.
+* **Falta de Histórico:** Se os gráficos de sinal ou banda estiverem vazios, certifique-se de que a CPE está online e que o fabricante expõe os parâmetros corretamente (ex: `InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.TotalBytesReceived`).
+* **Traceroute com Timeout:** Algumas ONTs não suportam diagnósticos TR-069. O sistema tenta os paths TR-098 e TR-181. Se ambos falharem, o dispositivo não suporta a função via ACS.

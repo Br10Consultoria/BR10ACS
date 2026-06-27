@@ -426,35 +426,77 @@ export default function DeviceDetailPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Tráfego</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Tráfego</CardTitle>
+                {bandwidthData.length > 0 && (
+                  <span className="text-xs text-slate-400">{bandwidthData.length} períodos coletados</span>
+                )}
+              </div>
+            </CardHeader>
             <CardContent className="space-y-3">
-              {/* Download */}
-              {d.wanBytesReceived != null && (
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-500">Download Total</span>
-                    <span className="font-semibold text-blue-700">{formatBytes(d.wanBytesReceived as number)}</span>
+              {/* Volumes totais */}
+              {(d.wanBytesReceived != null || d.wanBytesSent != null) ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                    <div className="text-xs text-blue-500 font-medium mb-1">Download Total</div>
+                    <div className="text-lg font-bold text-blue-700">{d.wanBytesReceived != null ? formatBytes(d.wanBytesReceived as number) : '—'}</div>
+                    {bandwidthData.length > 0 && (() => {
+                      const last = bandwidthData[bandwidthData.length - 1]
+                      return last.downMbps != null ? (
+                        <div className="text-xs text-blue-400 mt-1">Último: {last.downMbps.toFixed(2)} Mbps</div>
+                      ) : null
+                    })()}
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5">
-                    <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((d.wanBytesReceived as number) / 10_737_418_240) * 100)}%` }} />
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                    <div className="text-xs text-emerald-500 font-medium mb-1">Upload Total</div>
+                    <div className="text-lg font-bold text-emerald-700">{d.wanBytesSent != null ? formatBytes(d.wanBytesSent as number) : '—'}</div>
+                    {bandwidthData.length > 0 && (() => {
+                      const last = bandwidthData[bandwidthData.length - 1]
+                      return last.upMbps != null ? (
+                        <div className="text-xs text-emerald-400 mt-1">Último: {last.upMbps.toFixed(2)} Mbps</div>
+                      ) : null
+                    })()}
                   </div>
                 </div>
-              )}
-              {/* Upload */}
-              {d.wanBytesSent != null && (
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-500">Upload Total</span>
-                    <span className="font-semibold text-emerald-700">{formatBytes(d.wanBytesSent as number)}</span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5">
-                    <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((d.wanBytesSent as number) / 10_737_418_240) * 100)}%` }} />
-                  </div>
-                </div>
-              )}
-              {d.wanBytesReceived == null && d.wanBytesSent == null && (
+              ) : (
                 <p className="text-xs text-slate-400 text-center py-2">Dados de tráfego não disponíveis — faça Refresh para coletar</p>
               )}
+
+              {/* Mini-gráfico de banda inline */}
+              {bandwidthData.length > 1 ? (
+                <div>
+                  <div className="text-xs text-slate-500 font-medium mb-2">Banda por período (Mbps)</div>
+                  <ResponsiveContainer width="100%" height={100}>
+                    <AreaChart data={bandwidthData} margin={{ top: 2, right: 8, left: -30, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradDownMini" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gradUpMini" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="time" tick={{ fontSize: 9, fill: '#94a3b8' }} interval="preserveStartEnd" />
+                      <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} domain={[0, 'auto']} />
+                      <Tooltip
+                        contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e2e8f0' }}
+                        formatter={(value, name) => [value != null ? `${Number(value).toFixed(2)} Mbps` : '—', name === 'downMbps' ? 'DL' : 'UL']}
+                      />
+                      <Area type="monotone" dataKey="downMbps" stroke="#3b82f6" strokeWidth={1.5} fill="url(#gradDownMini)" dot={false} connectNulls />
+                      <Area type="monotone" dataKey="upMbps" stroke="#10b981" strokeWidth={1.5} fill="url(#gradUpMini)" dot={false} connectNulls />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 bg-slate-50 rounded-lg p-3 text-center">
+                  Gráfico de banda disponível após 2+ ciclos de coleta
+                  <br /><span className="text-slate-300">(coletor roda a cada 5 min)</span>
+                </div>
+              )}
+
               <div className="pt-2 border-t border-slate-100 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Último Inform</span>

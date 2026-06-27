@@ -8,6 +8,7 @@ import { DiagnosticLog, DiagnosticLogDocument } from './schemas/diagnostic-log.s
 import { TimeSeries, TimeSeriesDocument } from '../devices/schemas/timeseries.schema';
 import { DevicesService } from '../devices/devices.service';
 import { LogsService } from '../logs/logs.service';
+import { SettingsService } from '../settings/settings.service';
 
 export type DiagnosticType = 'ping' | 'traceroute' | 'speedtest';
 
@@ -29,6 +30,7 @@ export class DiagnosticsService {
     private genieAcsService: GenieAcsService,
     private configService: ConfigService,
     private logsService: LogsService,
+    private settingsService: SettingsService,
     @Inject(forwardRef(() => DevicesService)) private devicesService: DevicesService,
     @InjectModel(DiagnosticLog.name) private diagLogModel: Model<DiagnosticLogDocument>,
     @InjectModel(TimeSeries.name) private timeSeriesModel: Model<TimeSeriesDocument>,
@@ -38,6 +40,32 @@ export class DiagnosticsService {
     if (apiKey) {
       this.openai = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
     }
+  }
+
+  /** Recarrega o cliente OpenAI usando a chave armazenada no banco (Settings). */
+  async reloadOpenAI(): Promise<{ configured: boolean }> {
+    const apiKey = await this.settingsService.get<string>('openai.apiKey', '');
+    const baseUrl = await this.settingsService.get<string>('openai.baseUrl', '');
+    const envKey = this.configService.get<string>('OPENAI_API_KEY') || '';
+    const envBase = this.configService.get<string>('OPENAI_API_BASE') || '';
+    const key = apiKey || envKey;
+    const base = baseUrl || envBase;
+    if (key) {
+      this.openai = new OpenAI({ apiKey: key, ...(base ? { baseURL: base } : {}) });
+      this.logger.log('OpenAI client recarregado com chave do banco');
+      return { configured: true };
+    }
+    this.openai = null;
+    return { configured: false };
+  }
+
+  /** Retorna se a IA está configurada (sem expor a chave). */
+  async getAiStatus(): Promise<{ configured: boolean; source: string }> {
+    const dbKey = await this.settingsService.get<string>('openai.apiKey', '');
+    const envKey = this.configService.get<string>('OPENAI_API_KEY') || '';
+    if (dbKey) return { configured: true, source: 'database' };
+    if (envKey) return { configured: true, source: 'env' };
+    return { configured: false, source: 'none' };
   }
 
   // ── Diagnósticos TR-069 ────────────────────────────────────────────────────
