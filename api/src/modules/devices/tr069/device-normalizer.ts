@@ -74,9 +74,12 @@ export interface WifiNetwork {
 export interface ConnectedHost {
   hostname: string;
   ip: string;
+  ipv6: string | null;
   mac: string;
   interfaceType: string;
   active: boolean;
+  layer2Interface: string | null;
+  addressSource: string | null;
 }
 
 export class DeviceNormalizer {
@@ -138,9 +141,17 @@ export class DeviceNormalizer {
       ipv4: this.extractWanPpp(device, 'ExternalIPAddress') ||
             this.extractWanIp(device, 'ExternalIPAddress'),
       ipv6: this.extractWanPpp(device, 'ExternalIPv6Address') ||
+            this.extractWanIp(device, 'ExternalIPv6Address') ||
+            this.extractWanIpv6Itbs(device) ||
             this.extractStr(device, [
               'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.X_ITBS_IPv6Address._value',
               'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_ITBS_IPv6Address._value',
+              'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.X_ITBS_IPv6ExternalAddress._value',
+              'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_ITBS_IPv6ExternalAddress._value',
+              'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.X_ITBS_IPv6GUAFormPrefixAddress._value',
+              'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_ITBS_IPv6GUAFormPrefixAddress._value',
+              'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.X_ITBS_IPv6PrefixDelegationAddress._value',
+              'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_ITBS_IPv6PrefixDelegationAddress._value',
             ]),
       pppLogin: this.extractWanPpp(device, 'Username'),
       pppGateway: this.extractWanPpp(device, 'DefaultGateway') ||
@@ -334,6 +345,54 @@ export class DeviceNormalizer {
     return networks;
   }
 
+  private static extractHostIpv6(host: any): string | null {
+    // Campos comuns de IPv6 em tabelas de hosts TR-069
+    const fields = [
+      'IPv6Address',
+      'X_ITBS_IPv6Address',
+      'X_HW_IPv6Address',
+      'X_ZTE_IPv6Address',
+      'X_ALCL_IPv6Address',
+      'X_CT-COM_IPv6Address',
+    ];
+    for (const f of fields) {
+      const val = host[f]?._value;
+      if (val && val !== '' && val !== '::' && val !== '0::0') return String(val);
+    }
+    // Tenta IPv6AddressList (alguns modelos retornam lista separada por vírgula)
+    const list = host.IPv6AddressList?._value || host.X_ITBS_IPv6AddressList?._value;
+    if (list && list !== '') {
+      const first = String(list).split(',')[0].trim();
+      if (first && first !== '::') return first;
+    }
+    return null;
+  }
+
+  private static extractWanIpv6Itbs(device: GenieDevice): string | null {
+    // Extrai IPv6 WAN dos campos X_ITBS específicos para equipamentos ITBS/Intelbras
+    for (const wanIdx of ['1', '2']) {
+      for (const connIdx of ['1', '2']) {
+        const base = `InternetGatewayDevice.WANDevice.${wanIdx}.WANConnectionDevice.${connIdx}.WANPPPConnection.1`;
+        // Prefixo delegado (ex: 2804:2e48:a:a289::/64) — extrai apenas o endereço sem a máscara
+        const prefixPath = `${base}.X_ITBS_IPv6PrefixDelegationAddress._value`;
+        const prefix = this.getNestedValue(device, prefixPath);
+        if (prefix && prefix !== '' && prefix !== '::') {
+          // Retorna o prefixo completo (inclui /64 para indicar que é delegado)
+          return String(prefix);
+        }
+        // GUA formado a partir do prefixo
+        const guaPath = `${base}.X_ITBS_IPv6GUAFormPrefixAddress._value`;
+        const gua = this.getNestedValue(device, guaPath);
+        if (gua && gua !== '' && gua !== '::') return String(gua);
+        // Endereço externo IPv6
+        const extPath = `${base}.X_ITBS_IPv6ExternalAddress._value`;
+        const ext = this.getNestedValue(device, extPath);
+        if (ext && ext !== '' && ext !== '::') return String(ext);
+      }
+    }
+    return null;
+  }
+
   private static detectBand(wlan: any, index: number): string {
     const bw = String(wlan.BandWidth?._value || '');
     const ch = Number(wlan.Channel?._value || 0);
@@ -356,12 +415,18 @@ export class DeviceNormalizer {
       const mac = host.MACAddress?._value;
       if (!ip && !mac) continue;
 
+      // Tenta extrair IPv6 do host via múltiplos campos
+      const ipv6 = this.extractHostIpv6(host);
+
       hosts.push({
         hostname: String(host.HostName?._value || ''),
         ip: String(ip || ''),
+        ipv6,
         mac: String(mac || ''),
         interfaceType: String(host.InterfaceType?._value || ''),
         active: host.Active?._value === true || host.Active?._value === '1',
+        layer2Interface: host.Layer2Interface?._value ? String(host.Layer2Interface._value) : null,
+        addressSource: host.AddressSource?._value ? String(host.AddressSource._value) : null,
       });
     }
     return hosts;

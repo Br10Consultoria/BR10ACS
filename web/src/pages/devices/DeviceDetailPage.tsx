@@ -411,7 +411,7 @@ export default function DeviceDetailPage() {
               {[
                 ['Usuário PPPoE', d.pppLogin],
                 ['IPv4', d.ipv4],
-                ['IPv6', d.ipv6],
+                ['IPv6 WAN', d.ipv6],
                 ['Gateway', d.pppGateway],
                 ['DNS', d.pppDNSServers],
                 ['Status PPPoE', d.pppConnectionStatus],
@@ -419,7 +419,15 @@ export default function DeviceDetailPage() {
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between text-sm">
                   <span className="text-slate-500">{label as string}</span>
-                  <span className="font-mono text-xs font-medium text-slate-700 text-right">{(value as string) || '—'}</span>
+                  {label === 'IPv6 WAN' ? (
+                    <span className={`font-mono text-xs font-medium text-right max-w-[65%] break-all ${
+                      value ? 'text-blue-600' : 'text-slate-400'
+                    }`}>
+                      {(value as string) || '—'}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-xs font-medium text-slate-700 text-right">{(value as string) || '—'}</span>
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -687,7 +695,10 @@ export default function DeviceDetailPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-mono text-slate-600">{(host.ip as string) || '—'}</div>
-                    <div className="text-xs text-slate-400">{(host.interface as string) || '—'}</div>
+                    {(host.ipv6 as string) && (
+                      <div className="text-xs font-mono text-blue-500 mt-0.5 max-w-[200px] truncate" title={host.ipv6 as string}>{host.ipv6 as string}</div>
+                    )}
+                    <div className="text-xs text-slate-400">{(host.interfaceType as string) || (host.interface as string) || '—'}</div>
                   </div>
                 </div>
               ))}
@@ -755,7 +766,12 @@ export default function DeviceDetailPage() {
         </Card>
       )}
       {activeTab === 'erp' && (
-        <ErpTab deviceId={deviceId} pppLogin={(d.pppLogin as string) || ''} serialNumber={(d.serialNumber as string) || ''} />
+        <ErpTab
+          deviceId={deviceId}
+          pppLogin={(d.pppLogin as string) || ''}
+          serialNumber={(d.serialNumber as string) || ''}
+          macAddress={(d.pppMACAddress as string) || ''}
+        />
       )}
       {activeTab === 'raw' && (
         <Card>
@@ -1307,6 +1323,7 @@ interface ErpTabProps {
   deviceId: string
   pppLogin: string
   serialNumber: string
+  macAddress?: string
 }
 
 interface Integration {
@@ -1330,9 +1347,9 @@ interface CustomerResult {
   rawData?: Record<string, unknown>
 }
 
-function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
+function ErpTab({ pppLogin, serialNumber, macAddress }: ErpTabProps) {
   const [selectedIntegration, setSelectedIntegration] = useState<string>('')
-  const [lookupKey, setLookupKey] = useState<'pppoe' | 'serial'>('pppoe')
+  const [lookupKey, setLookupKey] = useState<'pppoe' | 'serial' | 'ixc_login' | 'ixc_mac'>('pppoe')
   const [manualValue, setManualValue] = useState('')
 
   const { data: integrations = [] } = useQuery({
@@ -1371,9 +1388,18 @@ function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
 
   const handleLookup = () => {
     if (!selectedIntegration) { toast.error('Selecione uma integração ERP'); return }
-    const value = manualValue.trim() || (lookupKey === 'pppoe' ? pppLogin : serialNumber)
+    const defaultValue =
+      lookupKey === 'pppoe' ? pppLogin :
+      lookupKey === 'serial' ? serialNumber :
+      lookupKey === 'ixc_login' ? pppLogin :
+      macAddress || ''
+    const value = manualValue.trim() || defaultValue
     if (!value) { toast.error('Nenhum valor para buscar'); return }
-    const params: Record<string, string> = lookupKey === 'pppoe' ? { pppoe: value } : { serial: value }
+    const params: Record<string, string> =
+      lookupKey === 'pppoe' ? { pppoe: value } :
+      lookupKey === 'serial' ? { serial: value } :
+      lookupKey === 'ixc_login' ? { login: value } :
+      { mac: value }
     lookupMut.mutate({ integrationId: selectedIntegration, params })
   }
 
@@ -1429,12 +1455,14 @@ function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
                 <label className="block text-xs font-medium text-slate-600 mb-2">Buscar por</label>
                 <div className="flex gap-2">
                   {[
-                    { key: 'pppoe' as const, label: 'Login PPPoE', value: pppLogin },
-                    { key: 'serial' as const, label: 'Serial', value: serialNumber },
+                    { key: 'pppoe' as const, label: 'Login PPPoE', value: pppLogin, desc: 'Busca genérica por PPPoE' },
+                    { key: 'serial' as const, label: 'Serial', value: serialNumber, desc: 'Busca genérica por serial' },
+                    { key: 'ixc_login' as const, label: 'Login IXC (radusuarios)', value: pppLogin, desc: 'Endpoint IXC dedicado' },
+                    { key: 'ixc_mac' as const, label: 'MAC ONT (IXC fibra)', value: macAddress || '', desc: 'radpop_radio_cliente_fibra' },
                   ].map(opt => (
                     <button
                       key={opt.key}
-                      onClick={() => { setLookupKey(opt.key); setManualValue('') }}
+                      onClick={() => { setLookupKey(opt.key as typeof lookupKey); setManualValue('') }}
                       className={`flex-1 px-3 py-2 border rounded-lg text-xs text-left transition-all ${
                         lookupKey === opt.key
                           ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
@@ -1442,7 +1470,12 @@ function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
                       }`}
                     >
                       <div className="font-medium">{opt.label}</div>
-                      <div className="font-mono text-slate-400 truncate">{opt.value || '(não disponível)'}</div>
+                      <div className="font-mono text-slate-400 truncate">
+                        {opt.key === 'ixc_login' || opt.key === 'ixc_mac'
+                          ? <span className="text-purple-500 font-sans">{opt.desc}</span>
+                          : (opt.value || '(não disponível)')
+                        }
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -1456,7 +1489,12 @@ function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder={lookupKey === 'pppoe' ? pppLogin || 'Login PPPoE...' : serialNumber || 'Serial...'}
+                    placeholder={
+                      lookupKey === 'pppoe' ? pppLogin || 'Login PPPoE...' :
+                      lookupKey === 'serial' ? serialNumber || 'Número de série...' :
+                      lookupKey === 'ixc_login' ? pppLogin || 'Login PPPoE / usuário RADIUS...' :
+                      macAddress || 'MAC da ONT (ex: AA:BB:CC:DD:EE:FF)...'
+                    }
                     value={manualValue}
                     onChange={e => setManualValue(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleLookup()}

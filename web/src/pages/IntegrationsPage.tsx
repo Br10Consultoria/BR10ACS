@@ -725,7 +725,8 @@ function ImportCollectionModal({ onClose, onSuccess, existingIntegrations = [] }
       const res = await integrationsApi.parseApiCollection(fileContent)
       const data = res.data as { endpoints: ParsedEndpoint[]; baseUrl?: string; authType?: string }
       setParsed(data)
-      if (data.baseUrl) setBaseUrl(data.baseUrl.replace('HOST', ''))
+      // Só sobrescreve baseUrl se ainda não estiver preenchida (evita apagar credenciais da integração existente)
+      if (data.baseUrl && !baseUrl) setBaseUrl(data.baseUrl.replace('HOST', ''))
       setStep('preview')
     } catch (err: any) {
       toast.error('Erro ao analisar coleção: ' + (err?.message || 'desconhecido'))
@@ -735,7 +736,9 @@ function ImportCollectionModal({ onClose, onSuccess, existingIntegrations = [] }
   }
 
   const handleCreate = async () => {
-    if (!baseUrl || !apiKey) {
+    // Quando existe integração prévia, URL e token já estão salvos no servidor — não bloquear
+    const needsCredentials = !existingIxc
+    if (needsCredentials && (!baseUrl || !apiKey)) {
       toast.error('Informe a URL base e o token de acesso')
       return
     }
@@ -920,11 +923,12 @@ function ImportCollectionModal({ onClose, onSuccess, existingIntegrations = [] }
           {step === 'configure' && (
             <div className="px-6 py-5 space-y-4">
               {existingIxc && (
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2">
-                  <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-700">
-                    Integração <strong>{existingIxc.name}</strong> detectada. Os campos foram pré-preenchidos com as credenciais existentes.
-                    Ao confirmar, a integração será <strong>atualizada</strong> com os novos endpoints importados.
+                <div className="bg-green-50 border border-green-100 rounded-xl p-3 flex gap-2">
+                  <Info className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-green-700">
+                    Integração <strong className="font-semibold">{existingIxc.name}</strong> detectada.
+                    URL e token foram carregados automaticamente das credenciais existentes — não é necessário preencher novamente.
+                    Ao confirmar, a integração será <strong className="font-semibold">atualizada</strong> com os novos endpoints importados.
                   </p>
                 </div>
               )}
@@ -939,26 +943,42 @@ function ImportCollectionModal({ onClose, onSuccess, existingIntegrations = [] }
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">URL base da API *</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  URL base da API {!existingIxc && '*'}
+                </label>
                 <input
                   type="url"
                   placeholder="https://suaempresa.ixcsoft.com.br"
                   value={baseUrl}
                   onChange={e => setBaseUrl(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  readOnly={!!existingIxc && !!baseUrl}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    existingIxc && baseUrl ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-200'
+                  }`}
                 />
-                <p className="text-xs text-slate-400 mt-1">Substitua HOST pelo endereço do seu servidor IXC</p>
+                {existingIxc && baseUrl
+                  ? <p className="text-xs text-green-600 mt-1">✓ Carregado da integração existente</p>
+                  : <p className="text-xs text-slate-400 mt-1">Substitua HOST pelo endereço do seu servidor IXC</p>
+                }
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Token de acesso (userId:token) *</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Token de acesso (userId:token) {!existingIxc && '*'}
+                </label>
                 <input
                   type="password"
                   placeholder="6:4dacdb8e47193e8cbbabe508c3c59b4547e463817b1d9b9a1d20ab4812fe1a62"
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  readOnly={!!existingIxc && !!apiKey}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    existingIxc && apiKey ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-200'
+                  }`}
                 />
-                <p className="text-xs text-slate-400 mt-1">Formato: userId:token — encontrado nas configurações de API do IXC</p>
+                {existingIxc && apiKey
+                  ? <p className="text-xs text-green-600 mt-1">✓ Token carregado (criptografado)</p>
+                  : <p className="text-xs text-slate-400 mt-1">Formato: userId:token — encontrado nas configurações de API do IXC</p>
+                }
               </div>
 
               <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-2">
@@ -973,7 +993,7 @@ function ImportCollectionModal({ onClose, onSuccess, existingIntegrations = [] }
                 <button onClick={() => setStep('preview')} className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700">Voltar</button>
                 <button
                   onClick={handleCreate}
-                  disabled={creating || !baseUrl || !apiKey}
+                  disabled={creating || (!existingIxc && (!baseUrl || !apiKey))}
                   className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-40 transition-colors"
                 >
                   {creating

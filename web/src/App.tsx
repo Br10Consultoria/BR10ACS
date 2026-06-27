@@ -17,6 +17,7 @@ import AlertsPage from '@/pages/alerts/AlertsPage'
 import AutoconfigPage from '@/pages/AutoconfigPage'
 import IntegrationsPage from '@/pages/IntegrationsPage'
 import AiAnalysisPage from '@/pages/AiAnalysisPage'
+import DocsPage from '@/pages/DocsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10000 } },
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="alerts" element={<AlertsPage />} />
             <Route path="integrations" element={<IntegrationsPage />} />
             <Route path="ai-analysis" element={<AiAnalysisPage />} />
+            <Route path="docs" element={<DocsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
