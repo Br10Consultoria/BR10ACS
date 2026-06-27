@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactElement } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Link2, Plus, Trash2, CheckCircle, XCircle, RefreshCw,
@@ -313,7 +313,7 @@ function IntegrationWizard({ onClose, onSuccess }: WizardProps) {
 
 // ── Painel de Lookup ──────────────────────────────────────────────────────────
 
-const AUTH_ICONS: Record<string, JSX.Element> = {
+const AUTH_ICONS: Record<string, ReactElement> = {
   apikey_header: <Key className="w-3 h-3" />,
   bearer:        <Shield className="w-3 h-3" />,
   basic:         <Key className="w-3 h-3" />,
@@ -685,10 +685,10 @@ export default function IntegrationsPage() {
                           {integration.stats?.lastUsed && (
                             <><span>·</span><span>último uso: {new Date(integration.stats.lastUsed).toLocaleDateString('pt-BR')}</span></>
                           )}
-                          {integration.config?.authType && (
+                          {typeof integration.config?.authType === 'string' && (
                             <span className="flex items-center gap-0.5 text-slate-400">
-                              · {AUTH_ICONS[String(integration.config.authType)] || null}
-                              {AUTH_LABELS[String(integration.config.authType)] || String(integration.config.authType)}
+                              · {AUTH_ICONS[integration.config.authType] || null}
+                              {AUTH_LABELS[integration.config.authType] || integration.config.authType}
                             </span>
                           )}
                         </div>
