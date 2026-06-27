@@ -5,6 +5,8 @@ import axios from 'axios';
 import * as nodemailer from 'nodemailer';
 import { Alert, AlertDocument, AlertType, AlertSeverity } from './schemas/alert.schema';
 import { SettingsService } from '../settings/settings.service';
+import { LogsService } from '../logs/logs.service';
+import { LogCategory } from '../logs/schemas/log.schema';
 
 export interface AlertCreateDto {
   deviceId: string;
@@ -29,6 +31,7 @@ export class AlertsService {
   constructor(
     @InjectModel(Alert.name) private alertModel: Model<AlertDocument>,
     private readonly settingsService: SettingsService,
+    private readonly logsService: LogsService,
   ) {}
 
   async create(dto: AlertCreateDto): Promise<AlertDocument> {
@@ -109,6 +112,13 @@ export class AlertsService {
           message: `Dispositivo ${serial || id} ficou offline${pppLogin ? ` (PPPoE: ${pppLogin})` : ''}`,
           metadata: { model, serial, pppLogin },
         });
+        // Persiste log no MongoDB (visível na tela de Logs)
+        await this.logsService.warn(
+          alert.message,
+          LogCategory.DEVICE,
+          { alertId: String(alert._id), type: alert.type, model, serial, pppLogin },
+          id,
+        ).catch(() => {});
         await this.sendNotifications(alert);
       }
     } else {
@@ -125,6 +135,12 @@ export class AlertsService {
           message: `Dispositivo ${serial || id} voltou online${pppLogin ? ` (PPPoE: ${pppLogin})` : ''}`,
           metadata: { model, serial, pppLogin },
         });
+        await this.logsService.info(
+          alert.message,
+          LogCategory.DEVICE,
+          { alertId: String(alert._id), type: alert.type, model, serial, pppLogin },
+          id,
+        ).catch(() => {});
         await this.sendNotifications(alert);
       }
     }
@@ -144,6 +160,12 @@ export class AlertsService {
             message: `Sinal crítico em ${serial || id}: RX ${rxPower.toFixed(2)} dBm (limiar: -27 dBm)${pppLogin ? ` | PPPoE: ${pppLogin}` : ''}`,
             metadata: { rxPower, model, serial, pppLogin },
           });
+          await this.logsService.warn(
+            alert.message,
+            LogCategory.DEVICE,
+            { alertId: String(alert._id), type: alert.type, rxPower, model, serial, pppLogin },
+            id,
+          ).catch(() => {});
           await this.sendNotifications(alert);
         }
       } else {
@@ -160,6 +182,12 @@ export class AlertsService {
             message: `Sinal recuperado em ${serial || id}: RX ${rxPower.toFixed(2)} dBm${pppLogin ? ` | PPPoE: ${pppLogin}` : ''}`,
             metadata: { rxPower, model, serial, pppLogin },
           });
+          await this.logsService.info(
+            alert.message,
+            LogCategory.DEVICE,
+            { alertId: String(alert._id), type: alert.type, rxPower, model, serial, pppLogin },
+            id,
+          ).catch(() => {});
           await this.sendNotifications(alert);
         }
       }
@@ -179,6 +207,12 @@ export class AlertsService {
       });
     } catch (err: any) {
       this.logger.error(`Erro ao enviar notificação para alerta ${alert._id}: ${err?.message}`);
+      await this.logsService.error(
+        `Falha ao enviar notificação do alerta ${alert.type}: ${err?.message}`,
+        LogCategory.SYSTEM,
+        { alertId: String(alert._id), error: err?.message },
+        alert.deviceId,
+      ).catch(() => {});
     }
   }
 
@@ -230,8 +264,20 @@ export class AlertsService {
         parse_mode: 'Markdown',
       }, { timeout: 8000 });
       this.logger.debug(`Telegram: alerta '${alert.type}' enviado para chat ${chatId}`);
+      await this.logsService.info(
+        `Telegram: alerta '${alert.type}' enviado — ${alert.deviceSerial || alert.deviceId}`,
+        LogCategory.SYSTEM,
+        { channel: 'telegram', alertType: alert.type, chatId },
+        alert.deviceId,
+      ).catch(() => {});
     } catch (err: any) {
       this.logger.warn(`Telegram falhou: ${err?.message}`);
+      await this.logsService.warn(
+        `Telegram: falha ao enviar alerta '${alert.type}' — ${err?.message}`,
+        LogCategory.SYSTEM,
+        { channel: 'telegram', alertType: alert.type, error: err?.message },
+        alert.deviceId,
+      ).catch(() => {});
     }
   }
 
@@ -266,8 +312,20 @@ export class AlertsService {
     try {
       await axios.post(webhookUrl, payload, { headers, timeout: 8000 });
       this.logger.debug(`Webhook: alerta '${alert.type}' enviado para ${webhookUrl}`);
+      await this.logsService.info(
+        `Webhook: alerta '${alert.type}' enviado — ${alert.deviceSerial || alert.deviceId}`,
+        LogCategory.SYSTEM,
+        { channel: 'webhook', alertType: alert.type, url: webhookUrl },
+        alert.deviceId,
+      ).catch(() => {});
     } catch (err: any) {
       this.logger.warn(`Webhook falhou: ${err?.message}`);
+      await this.logsService.warn(
+        `Webhook: falha ao enviar alerta '${alert.type}' — ${err?.message}`,
+        LogCategory.SYSTEM,
+        { channel: 'webhook', alertType: alert.type, error: err?.message },
+        alert.deviceId,
+      ).catch(() => {});
     }
   }
 
@@ -318,8 +376,20 @@ export class AlertsService {
       const transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
       await transporter.sendMail({ from, to, subject, html });
       this.logger.debug(`SMTP: e-mail de alerta '${alert.type}' enviado para ${to}`);
+      await this.logsService.info(
+        `E-mail: alerta '${alert.type}' enviado para ${to} — ${alert.deviceSerial || alert.deviceId}`,
+        LogCategory.SYSTEM,
+        { channel: 'email', alertType: alert.type, to },
+        alert.deviceId,
+      ).catch(() => {});
     } catch (err: any) {
       this.logger.warn(`SMTP falhou: ${err?.message}`);
+      await this.logsService.warn(
+        `E-mail: falha ao enviar alerta '${alert.type}' — ${err?.message}`,
+        LogCategory.SYSTEM,
+        { channel: 'email', alertType: alert.type, error: err?.message },
+        alert.deviceId,
+      ).catch(() => {});
     }
   }
 

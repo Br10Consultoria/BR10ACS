@@ -4,6 +4,8 @@ import { Model } from 'mongoose';
 import axios, { AxiosRequestConfig } from 'axios';
 import { Integration, IntegrationDocument } from './schemas/integration.schema';
 import { ERP_ADAPTERS, ErpAdapter } from './erp-adapters';
+import { LogsService } from '../logs/logs.service';
+import { LogCategory } from '../logs/schemas/log.schema';
 
 export interface CustomerLookupResult {
   found: boolean;
@@ -28,6 +30,7 @@ export class IntegrationsService {
 
   constructor(
     @InjectModel(Integration.name) private integrationModel: Model<IntegrationDocument>,
+    private readonly logsService: LogsService,
   ) {}
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -271,7 +274,13 @@ export class IntegrationsService {
         if (statusCode === 401 || statusCode === 403) {
           return { ok: false, statusCode, message: 'Credenciais inválidas ou sem permissão', latencyMs };
         }
-        return { ok: true, statusCode, message: 'Conexão e autenticação bem-sucedidas', latencyMs };
+        const result = { ok: true, statusCode, message: 'Conexão e autenticação bem-sucedidas', latencyMs };
+        await this.logsService.info(
+          `Teste de conexão OK — ${integration.name} (${statusCode}, ${latencyMs}ms)`,
+          LogCategory.INTEGRATION,
+          { integrationId: id, name: integration.name, statusCode, latencyMs },
+        ).catch(() => {});
+        return result;
       } catch (err: unknown) {
         // Endpoint falhou — tenta URL base como fallback
       }
@@ -288,11 +297,26 @@ export class IntegrationsService {
       const latencyMs = Date.now() - start;
       const statusCode = res.status;
       if (statusCode === 401 || statusCode === 403) {
+        await this.logsService.warn(
+          `Teste de conexão falhou (credenciais inválidas) — ${integration.name}`,
+          LogCategory.INTEGRATION,
+          { integrationId: id, name: integration.name, statusCode },
+        ).catch(() => {});
         return { ok: false, statusCode, message: 'Credenciais inválidas ou sem permissão', latencyMs };
       }
+      await this.logsService.info(
+        `Teste de conexão OK — ${integration.name} (URL base acessível, ${latencyMs}ms)`,
+        LogCategory.INTEGRATION,
+        { integrationId: id, name: integration.name, statusCode, latencyMs },
+      ).catch(() => {});
       return { ok: true, statusCode, message: 'URL acessível', latencyMs };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
+      await this.logsService.warn(
+        `Teste de conexão falhou — ${integration.name}: ${msg}`,
+        LogCategory.INTEGRATION,
+        { integrationId: id, name: integration.name, error: msg },
+      ).catch(() => {});
       return { ok: false, message: `Falha na conexão: ${msg}` };
     }
   }

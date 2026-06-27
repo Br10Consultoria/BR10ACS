@@ -687,17 +687,20 @@ interface ParsedEndpoint {
 interface ImportCollectionModalProps {
   onClose: () => void
   onSuccess: () => void
+  existingIntegrations?: Integration[]
 }
 
-function ImportCollectionModal({ onClose, onSuccess }: ImportCollectionModalProps) {
+function ImportCollectionModal({ onClose, onSuccess, existingIntegrations = [] }: ImportCollectionModalProps) {
+  // Pré-preenche com a integração IXC existente (ixc ou ixc-csnet) se houver
+  const existingIxc = existingIntegrations.find(i => i.type === 'ixc' || i.type === 'ixc-csnet')
   const [step, setStep] = useState<'upload' | 'preview' | 'configure'>('upload')
   const [fileContent, setFileContent] = useState('')
   const [fileName, setFileName] = useState('')
   const [parsing, setParsing] = useState(false)
   const [parsed, setParsed] = useState<{ endpoints: ParsedEndpoint[]; baseUrl?: string; authType?: string } | null>(null)
-  const [name, setName] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [apiKey, setApiKey] = useState('')
+  const [name, setName] = useState(existingIxc ? existingIxc.name : '')
+  const [baseUrl, setBaseUrl] = useState((existingIxc?.config?.baseUrl as string) || '')
+  const [apiKey, setApiKey] = useState((existingIxc?.config?.apiKey as string) || '')
   const [creating, setCreating] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -738,18 +741,32 @@ function ImportCollectionModal({ onClose, onSuccess }: ImportCollectionModalProp
     }
     setCreating(true)
     try {
-      await integrationsApi.create({
-        name: name || `IXC - ${new Date().toLocaleDateString('pt-BR')}`,
-        type: 'ixc-csnet',
-        enabled: true,
-        config: {
-          baseUrl,
-          apiKey,
-          authType: parsed?.authType || 'basic',
-          importedEndpoints: parsed?.endpoints || [],
-        },
-      })
-      toast.success('Integração criada a partir da coleção!')
+      // Se já existe integração IXC, atualiza; caso contrário, cria nova
+      if (existingIxc) {
+        await integrationsApi.update(existingIxc._id, {
+          name: name || existingIxc.name,
+          config: {
+            ...existingIxc.config,
+            baseUrl,
+            apiKey,
+            authType: parsed?.authType || existingIxc.config?.authType || 'basic',
+            importedEndpoints: parsed?.endpoints || [],
+          },
+        })
+      } else {
+        await integrationsApi.create({
+          name: name || `IXC - ${new Date().toLocaleDateString('pt-BR')}`,
+          type: 'ixc',
+          enabled: true,
+          config: {
+            baseUrl,
+            apiKey,
+            authType: parsed?.authType || 'basic',
+            importedEndpoints: parsed?.endpoints || [],
+          },
+        })
+      }
+      toast.success(existingIxc ? 'Integração atualizada com novos endpoints!' : 'Integração criada a partir da coleção!')
       onSuccess()
     } catch (err: any) {
       toast.error('Erro ao criar integração: ' + (err?.response?.data?.message || err?.message))
@@ -902,6 +919,15 @@ function ImportCollectionModal({ onClose, onSuccess }: ImportCollectionModalProp
           {/* Step 3: Configure */}
           {step === 'configure' && (
             <div className="px-6 py-5 space-y-4">
+              {existingIxc && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2">
+                  <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-blue-700">
+                    Integração <strong>{existingIxc.name}</strong> detectada. Os campos foram pré-preenchidos com as credenciais existentes.
+                    Ao confirmar, a integração será <strong>atualizada</strong> com os novos endpoints importados.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Nome da integração</label>
                 <input
@@ -1051,6 +1077,7 @@ export default function IntegrationsPage() {
             qc.invalidateQueries({ queryKey: ['integrations'] })
             setShowImportModal(false)
           }}
+          existingIntegrations={integrations}
         />
       )}
 

@@ -10,7 +10,7 @@ export class Integration {
 
   @Prop({
     required: true,
-    enum: ['ixc', 'mk', 'sgp', 'hubsoft', 'leaf', 'spify', 'voalle', 'webhook', 'slack', 'telegram', 'custom'],
+    enum: ['ixc', 'ixc-csnet', 'mk', 'sgp', 'hubsoft', 'leaf', 'spify', 'voalle', 'webhook', 'slack', 'telegram', 'custom'],
   })
   type: string;
 
