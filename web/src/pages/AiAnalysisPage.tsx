@@ -344,7 +344,7 @@ export default function AiAnalysisPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <Link
-                      to={`/devices/${encodeURIComponent(id)}`}
+                      to={`/devices/${id}`}
                       className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
                       title="Abrir dispositivo"
                     >

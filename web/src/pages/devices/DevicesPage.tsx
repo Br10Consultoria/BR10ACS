@@ -308,7 +308,7 @@ export default function DevicesPage() {
                         </div>
                       </Td>
                       <Td>
-                        <Link to={`/devices/${encodeURIComponent(id)}`} className="text-blue-600 hover:text-blue-700 font-mono text-xs font-medium">
+                        <Link to={`/devices/${id}`} className="text-blue-600 hover:text-blue-700 font-mono text-xs font-medium">
                           {serial}
                         </Link>
                       </Td>

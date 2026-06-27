@@ -89,11 +89,23 @@ export class GenieAcsService implements OnModuleInit {
   }
 
   async addTag(deviceId: string, tag: string): Promise<void> {
-    await this.client.post(`/devices/${encodeURIComponent(deviceId)}/tags/${encodeURIComponent(tag)}`);
+    // GenieACS NBI v1.2 pode retornar 404 para este endpoint em algumas versões;
+    // tratamos silenciosamente para não interromper fluxos que usam tags.
+    await this.client.post(
+      `/devices/${encodeURIComponent(deviceId)}/tags/${encodeURIComponent(tag)}`,
+    ).catch((err: any) => {
+      if (err?.response?.status === 404) return; // endpoint não disponível nesta versão
+      throw err;
+    });
   }
 
   async removeTag(deviceId: string, tag: string): Promise<void> {
-    await this.client.delete(`/devices/${encodeURIComponent(deviceId)}/tags/${encodeURIComponent(tag)}`);
+    await this.client.delete(
+      `/devices/${encodeURIComponent(deviceId)}/tags/${encodeURIComponent(tag)}`,
+    ).catch((err: any) => {
+      if (err?.response?.status === 404) return;
+      throw err;
+    });
   }
 
   // ─── Tarefas (Tasks) ──────────────────────────────────────────────────────

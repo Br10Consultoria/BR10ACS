@@ -14,30 +14,30 @@ export const authApi = {
 export const devicesApi = {
   list: (params?: Record<string, unknown>) =>
     api.get('/devices', { params }),
-  get: (id: string) => api.get(`/devices/${id}`),
-  rawParams: (id: string) => api.get(`/devices/${id}/raw-params`),
-  reboot: (id: string) => api.post(`/devices/${id}/reboot`),
-  factoryReset: (id: string) => api.post(`/devices/${id}/factory-reset`),
-  connectionRequest: (id: string) => api.post(`/devices/${id}/connection-request`),
+  get: (id: string) => api.get(`/devices/${encodeURIComponent(id)}`),
+  rawParams: (id: string) => api.get(`/devices/${encodeURIComponent(id)}/raw-params`),
+  reboot: (id: string) => api.post(`/devices/${encodeURIComponent(id)}/reboot`),
+  factoryReset: (id: string) => api.post(`/devices/${encodeURIComponent(id)}/factory-reset`),
+  connectionRequest: (id: string) => api.post(`/devices/${encodeURIComponent(id)}/connection-request`),
   setParam: (id: string, name: string, value: string, type = 'xsd:string') =>
-    api.post(`/devices/${id}/parameters`, { params: [{ name, value, type }] }),
+    api.post(`/devices/${encodeURIComponent(id)}/parameters`, { params: [{ name, value, type }] }),
   timeseries: (id: string, metric: string, hours = 24) =>
-    api.get(`/devices/${id}/timeseries`, { params: { metric, hours } }),
+    api.get(`/devices/${encodeURIComponent(id)}/timeseries`, { params: { metric, hours } }),
   diagnostics: (id: string, type: string, params?: Record<string, unknown>) =>
-    api.post(`/devices/${id}/diagnostics/${type}`, params),
+    api.post(`/devices/${encodeURIComponent(id)}/diagnostics/${type}`, params),
   diagnosticsResult: (id: string, type: 'ping' | 'traceroute' | 'speedtest') =>
-    api.get(`/devices/${id}/diagnostics/${type}/result`),
+    api.get(`/devices/${encodeURIComponent(id)}/diagnostics/${type}/result`),
   diagnosticsHistory: (id: string, type?: string, limit = 20) =>
-    api.get(`/devices/${id}/diagnostics/history`, { params: { type, limit } }),
+    api.get(`/devices/${encodeURIComponent(id)}/diagnostics/history`, { params: { type, limit } }),
   aiAnalysis: (id: string) =>
-    api.post(`/devices/${id}/diagnostics/ai-analysis`),
+    api.post(`/devices/${encodeURIComponent(id)}/diagnostics/ai-analysis`),
   stats: () => api.get('/devices/stats'),
-  refresh: (id: string) => api.post(`/devices/${id}/refresh`),
-  delete: (id: string) => api.delete(`/devices/${id}`),
-  addTag: (id: string, tag: string) => api.post(`/devices/${id}/tags/${encodeURIComponent(tag)}`),
-  removeTag: (id: string, tag: string) => api.delete(`/devices/${id}/tags/${encodeURIComponent(tag)}`),
+  refresh: (id: string) => api.post(`/devices/${encodeURIComponent(id)}/refresh`),
+  delete: (id: string) => api.delete(`/devices/${encodeURIComponent(id)}`),
+  addTag: (id: string, tag: string) => api.post(`/devices/${encodeURIComponent(id)}/tags/${encodeURIComponent(tag)}`),
+  removeTag: (id: string, tag: string) => api.delete(`/devices/${encodeURIComponent(id)}/tags/${encodeURIComponent(tag)}`),
   getTimeSeries: (id: string, from?: string, to?: string, limit = 200) =>
-    api.get(`/devices/${id}/timeseries`, { params: { from, to, limit } }),
+    api.get(`/devices/${encodeURIComponent(id)}/timeseries`, { params: { from, to, limit } }),
 }
 
 // ── System / Metrics ────────────────────────────────────────────────────────

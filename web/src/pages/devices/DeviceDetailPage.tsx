@@ -47,7 +47,9 @@ export default function DeviceDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qc = useQueryClient()
-  const deviceId = decodeURIComponent(id || '')
+  // O React Router já decodifica automaticamente os parâmetros de rota;
+  // NÃO aplicar decodeURIComponent extra para evitar double-decode em IDs com %2D.
+  const deviceId = id || ''
 
   // Polling inteligente: após Refresh/Sync, re-fetch a cada 5s por 60s
   const startPolling = (durationSec = 60) => {

@@ -163,7 +163,7 @@ function DrillModal({ target, devices, onClose }: DrillModalProps) {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link
-                          to={`/devices/${encodeURIComponent(id)}`}
+                          to={`/devices/${id}`}
                           onClick={onClose}
                           className="text-blue-600 hover:text-blue-700 text-xs font-medium flex items-center gap-1 justify-end"
                         >
