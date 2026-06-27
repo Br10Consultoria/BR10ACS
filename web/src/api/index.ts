@@ -110,3 +110,29 @@ export const filesApi = {
   deleteFile: (fileName: string) =>
     api.delete(`/files/${encodeURIComponent(fileName)}`),
 }
+
+// ── Export ────────────────────────────────────────────────────────────────────
+const downloadBlob = async (url: string, filename: string) => {
+  const token = localStorage.getItem('token')
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const blob = await r.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(blobUrl)
+}
+
+export const exportApi = {
+  downloadExcel: (params?: Record<string, string>) => {
+    const base = String(api.defaults.baseURL || '')
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return downloadBlob(`${base}/devices/export/excel${qs}`, `dispositivos_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  },
+  downloadPdf: (params?: Record<string, string>) => {
+    const base = String(api.defaults.baseURL || '')
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return downloadBlob(`${base}/devices/export/pdf${qs}`, `dispositivos_${new Date().toISOString().slice(0, 10)}.pdf`)
+  },
+}

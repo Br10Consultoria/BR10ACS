@@ -3,9 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, RefreshCw, Power, RotateCcw, Wifi,
-  Signal, Activity, Monitor, Code, Users, Search, Download, Tag, X, Trash2
+  Signal, Activity, Monitor, Code, Users, Search, Download, Tag, X, Trash2, History, User
 } from 'lucide-react'
-import { devicesApi } from '@/api'
+import { devicesApi, logsApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, Badge, LoadingScreen } from '@/components/ui'
 import { formatDistanceToNow, format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -21,6 +21,7 @@ const TABS = [
   { id: 'wifi', label: 'Wi-Fi', icon: Wifi },
   { id: 'hosts', label: 'Hosts', icon: Users },
   { id: 'diagnostics', label: 'Diagnóstico', icon: Activity },
+  { id: 'history', label: 'Histórico', icon: History },
   { id: 'raw', label: 'Parâmetros Brutos', icon: Code },
 ]
 
@@ -87,6 +88,13 @@ export default function DeviceDetailPage() {
     queryKey: ['device-timeseries', deviceId],
     queryFn: () => devicesApi.getTimeSeries(deviceId).then(r => r.data),
     enabled: activeTab === 'signal',
+  })
+
+  const { data: deviceLogs, isLoading: logsLoading } = useQuery({
+    queryKey: ['device-logs', deviceId],
+    queryFn: () => logsApi.list({ deviceId, limit: 100 }).then(r => r.data),
+    enabled: activeTab === 'history',
+    refetchInterval: activeTab === 'history' ? 30000 : false,
   })
 
   const rebootMutation = useMutation({
@@ -535,40 +543,7 @@ export default function DeviceDetailPage() {
       )}
 
       {activeTab === 'wifi' && (
-        <Card>
-          <CardHeader><CardTitle>Redes Wi-Fi</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {((d.wifiNetworks as Record<string, unknown>[]) || []).map((net, i) => (
-                <div key={i} className="border border-slate-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-sm text-slate-800">{(net.ssid as string) || `Rede ${i + 1}`}</span>
-                    <Badge variant={(net.enabled as boolean) ? 'green' : 'gray'}>
-                      {(net.enabled as boolean) ? 'Ativa' : 'Inativa'}
-                    </Badge>
-                  </div>
-                  <div className="space-y-1 text-xs text-slate-500">
-                    <div className="flex justify-between">
-                      <span>Banda</span>
-                      <span>{(net.band as string) || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Canal</span>
-                      <span>{(net.channel as string) || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Dispositivos</span>
-                      <span>{(net.associated as number) ?? 0}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {(!(d.wifiNetworks as unknown[]) || (d.wifiNetworks as unknown[]).length === 0) && (
-                <p className="text-slate-400 text-sm col-span-2 py-4 text-center">Nenhuma rede Wi-Fi coletada</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <WifiTab deviceId={deviceId} device={d} />
       )}
 
       {activeTab === 'hosts' && (
@@ -601,10 +576,63 @@ export default function DeviceDetailPage() {
         </Card>
       )}
 
-      {activeTab === 'diagnostics' && (
+            {activeTab === 'diagnostics' && (
         <DiagnosticsTab deviceId={deviceId} />
       )}
-
+      {activeTab === 'history' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Histórico de Eventos</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {logsLoading ? (
+              <div className="p-8"><LoadingScreen /></div>
+            ) : (() => {
+              const logs: Record<string, unknown>[] = (deviceLogs as Record<string, unknown>[]) || []
+              if (logs.length === 0) {
+                return (
+                  <div className="text-center py-12 text-slate-400">
+                    <History className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                    <p>Nenhum evento registrado para este dispositivo</p>
+                  </div>
+                )
+              }
+              return (
+                <div className="divide-y divide-slate-50">
+                  {logs.map((log, idx) => {
+                    const action = (log.action as string) || ''
+                    const level = (log.level as string) || 'info'
+                    const dotColor = level === 'error' ? 'bg-red-500' : level === 'warn' ? 'bg-yellow-500' : level === 'success' ? 'bg-emerald-500' : 'bg-blue-400'
+                    return (
+                      <div key={(log._id as string) || idx} className="flex items-start gap-4 px-5 py-3 hover:bg-slate-50 transition-colors">
+                        <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${dotColor}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold text-slate-700">{action}</span>
+                            {log.userName && (
+                              <span className="flex items-center gap-1 text-xs text-slate-500">
+                                <User className="w-3 h-3" />{log.userName as string}
+                              </span>
+                            )}
+                          </div>
+                          {log.details && (
+                            <div className="text-xs text-slate-500 mt-0.5 truncate">{log.details as string}</div>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400 flex-shrink-0 text-right">
+                          {log.createdAt
+                            ? format(new Date(log.createdAt as string), "dd/MM/yy HH:mm", { locale: ptBR })
+                            : '—'}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </CardContent>
+        </Card>
+      )}
       {activeTab === 'raw' && (
         <Card>
           <CardHeader>
@@ -845,6 +873,148 @@ function DiagnosticsTab({ deviceId }: { deviceId: string }) {
           <ResultBox result={speedtest.result} type="speedtest" />
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+// ── Wi-Fi Tab com edição remota ───────────────────────────────────────────────
+function WifiTab({ deviceId, device }: { deviceId: string; device: Record<string, unknown> }) {
+  const qc = useQueryClient()
+  const networks: Record<string, unknown>[] = (device.wifiNetworks as Record<string, unknown>[]) || []
+
+  // Estado de edição por rede (índice)
+  const [editing, setEditing] = React.useState<number | null>(null)
+  const [editSsid, setEditSsid] = React.useState('')
+  const [editPass, setEditPass] = React.useState('')
+  const [showPass, setShowPass] = React.useState(false)
+
+  const setParamMutation = useMutation({
+    mutationFn: ({ name, value }: { name: string; value: string }) =>
+      devicesApi.setParam(deviceId, name, value),
+    onSuccess: () => {
+      toast.success('Parâmetro enviado ao dispositivo')
+      qc.invalidateQueries({ queryKey: ['device', deviceId] })
+      setEditing(null)
+    },
+    onError: () => toast.error('Falha ao enviar parâmetro'),
+  })
+
+  const applyWifi = (net: Record<string, unknown>, idx: number) => {
+    // Paths TR-069 padrão para SSID e senha
+    const base = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx + 1}`
+    if (editSsid && editSsid !== (net.ssid as string)) {
+      setParamMutation.mutate({ name: `${base}.SSID`, value: editSsid })
+    }
+    if (editPass) {
+      setParamMutation.mutate({ name: `${base}.PreSharedKey.1.PreSharedKey`, value: editPass })
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {networks.map((net, i) => (
+          <Card key={i}>
+            <CardHeader className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wifi className="w-4 h-4 text-blue-500" />
+                <span className="font-medium text-sm text-slate-800">{(net.ssid as string) || `Rede ${i + 1}`}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={(net.enabled as boolean) ? 'green' : 'gray'}>
+                  {(net.enabled as boolean) ? 'Ativa' : 'Inativa'}
+                </Badge>
+                <button
+                  onClick={() => {
+                    setEditing(editing === i ? null : i)
+                    setEditSsid((net.ssid as string) || '')
+                    setEditPass('')
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                >
+                  {editing === i ? 'Cancelar' : 'Editar'}
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="grid grid-cols-3 gap-2 text-xs text-slate-500">
+                <div className="text-center p-2 bg-slate-50 rounded-lg">
+                  <div className="font-semibold text-slate-700">{(net.band as string) || '—'}</div>
+                  <div>Banda</div>
+                </div>
+                <div className="text-center p-2 bg-slate-50 rounded-lg">
+                  <div className="font-semibold text-slate-700">{(net.channel as string) || '—'}</div>
+                  <div>Canal</div>
+                </div>
+                <div className="text-center p-2 bg-slate-50 rounded-lg">
+                  <div className="font-semibold text-slate-700">{(net.associated as number) ?? 0}</div>
+                  <div>Clientes</div>
+                </div>
+              </div>
+
+              {editing === i && (
+                <div className="mt-3 space-y-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <div className="text-xs font-semibold text-blue-700">Configuração Remota</div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Novo SSID</label>
+                    <input
+                      type="text"
+                      value={editSsid}
+                      onChange={(e) => setEditSsid(e.target.value)}
+                      placeholder={`SSID atual: ${(net.ssid as string) || '—'}`}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Nova Senha Wi-Fi</label>
+                    <div className="relative">
+                      <input
+                        type={showPass ? 'text' : 'password'}
+                        value={editPass}
+                        onChange={(e) => setEditPass(e.target.value)}
+                        placeholder="Deixe em branco para não alterar"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white pr-16"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPass(!showPass)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                      >
+                        {showPass ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setEditing(null)}
+                      className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => applyWifi(net, i)}
+                      disabled={setParamMutation.isPending || (!editSsid && !editPass)}
+                      className="px-3 py-1.5 text-xs bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      {setParamMutation.isPending ? 'Enviando...' : 'Aplicar'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    O parâmetro será enviado via TR-069 SetParameterValues. O dispositivo pode demorar até 30s para aplicar.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+        {networks.length === 0 && (
+          <div className="col-span-2 text-center py-12 text-slate-400">
+            <Wifi className="w-10 h-10 mx-auto mb-2 opacity-20" />
+            <p>Nenhuma rede Wi-Fi coletada para este dispositivo</p>
+            <p className="text-xs mt-1">Execute um Refresh para coletar os dados</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

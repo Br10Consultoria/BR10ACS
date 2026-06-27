@@ -1,26 +1,41 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Search, Filter, RefreshCw, Router, Clock, Wifi, WifiOff, Trash2 } from 'lucide-react'
-import { devicesApi } from '@/api'
-import { Card, Badge, LoadingScreen, Table, Th, Td } from '@/components/ui'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  Search, Filter, RefreshCw, Router, Clock, Wifi, WifiOff, Trash2,
+  ChevronLeft, ChevronRight, X, SlidersHorizontal, FileSpreadsheet, FileText,
+} from 'lucide-react'
+import { devicesApi, exportApi } from '@/api'
+import { Card, CardContent, Badge, LoadingScreen, Table, Th, Td } from '@/components/ui'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 
+const KNOWN_MANUFACTURERS = [
+  'INTELBRAS', 'HUAWEI', 'ZTE', 'NOKIA', 'FIBERHOME', 'VSOL', 'TP-LINK', 'DATACOM', 'PARKS',
+]
+
 export default function DevicesPage() {
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all')
+  const [manufacturerFilter, setManufacturerFilter] = useState('')
+  const [modelFilter, setModelFilter] = useState('')
+  const [firmwareFilter, setFirmwareFilter] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [page, setPage] = useState(1)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const limit = 20
-  const queryClient = useQueryClient()
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['devices', search, statusFilter, page],
+  const hasAdvancedFilters = !!(manufacturerFilter || modelFilter || firmwareFilter)
+
+  const { data, isLoading, isFetching, refetch } = useQuery({
+    queryKey: ['devices', search, statusFilter, manufacturerFilter, modelFilter, firmwareFilter, page],
     queryFn: () => devicesApi.list({
       search: search || undefined,
       online: statusFilter === 'all' ? undefined : statusFilter === 'online',
+      manufacturer: manufacturerFilter || undefined,
+      model: modelFilter || undefined,
       page,
       limit,
     }).then(r => r.data),
@@ -32,13 +47,31 @@ export default function DevicesPage() {
     onSuccess: () => {
       toast.success('Dispositivo removido do ACS')
       setConfirmDelete(null)
-      queryClient.invalidateQueries({ queryKey: ['devices'] })
+      qc.invalidateQueries({ queryKey: ['devices'] })
     },
     onError: () => toast.error('Erro ao remover dispositivo'),
   })
 
   const devices: Record<string, unknown>[] = data?.data || data?.devices || data || []
   const total: number = data?.total || devices.length
+  const totalPages = Math.ceil(total / limit)
+
+  const clearFilters = () => {
+    setSearch('')
+    setStatusFilter('all')
+    setManufacturerFilter('')
+    setModelFilter('')
+    setFirmwareFilter('')
+    setPage(1)
+  }
+
+  const activeFilterCount = [
+    search,
+    statusFilter !== 'all' ? statusFilter : '',
+    manufacturerFilter,
+    modelFilter,
+    firmwareFilter,
+  ].filter(Boolean).length
 
   return (
     <div className="space-y-5">
@@ -78,56 +111,162 @@ export default function DevicesPage() {
       )}
 
       {/* Filtros */}
-      <Card className="p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar por serial, IP, modelo, fabricante..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as 'all' | 'online' | 'offline'); setPage(1) }}
-              className="border border-slate-200 rounded-lg text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      <Card>
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-48">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar por serial, IP, PPPoE..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value as 'all' | 'online' | 'offline'); setPage(1) }}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Todos os status</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+              </select>
+            </div>
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm transition-colors ${
+                hasAdvancedFilters
+                  ? 'border-blue-400 bg-blue-50 text-blue-700'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
             >
-              <option value="all">Todos</option>
-              <option value="online">Online</option>
-              <option value="offline">Offline</option>
-            </select>
+              <SlidersHorizontal className="w-4 h-4" />
+              Filtros avançados
+              {hasAdvancedFilters && (
+                <span className="bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {[manufacturerFilter, modelFilter, firmwareFilter].filter(Boolean).length}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => refetch()}
-              className="p-2 border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 transition-colors"
+              disabled={isFetching}
+              className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
               title="Atualizar"
             >
               <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
             </button>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Limpar ({activeFilterCount})
+              </button>
+            )}
           </div>
-        </div>
+
+          {/* Filtros avançados */}
+          {showAdvanced && (
+            <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1 font-medium">Fabricante</label>
+                <select
+                  value={manufacturerFilter}
+                  onChange={(e) => { setManufacturerFilter(e.target.value); setPage(1) }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todos os fabricantes</option>
+                  {KNOWN_MANUFACTURERS.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1 font-medium">Modelo</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 1200R, HG8145V5..."
+                  value={modelFilter}
+                  onChange={(e) => { setModelFilter(e.target.value); setPage(1) }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1 font-medium">Firmware / Versão</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 2.2-250203..."
+                  value={firmwareFilter}
+                  onChange={(e) => { setFirmwareFilter(e.target.value); setPage(1) }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       {/* Tabela */}
       <Card>
-        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <Router className="w-4 h-4 text-slate-400" />
-            <span className="text-sm font-medium text-slate-600">
-              {total} dispositivo{total !== 1 ? 's' : ''}
+            <span className="text-sm font-semibold text-slate-700">
+              {isLoading ? 'Carregando...' : `${total} dispositivo${total !== 1 ? 's' : ''}`}
             </span>
           </div>
-          <div className="flex items-center gap-3 text-xs text-slate-400">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Online</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Offline</span>
+          <div className="flex items-center gap-2">
+            {isFetching && !isLoading && (
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <RefreshCw className="w-3 h-3 animate-spin" /> Atualizando...
+              </span>
+            )}
+            <button
+              onClick={() => exportApi.downloadExcel({
+                ...(manufacturerFilter ? { manufacturer: manufacturerFilter } : {}),
+                ...(modelFilter ? { model: modelFilter } : {}),
+                ...(statusFilter !== 'all' ? { online: String(statusFilter === 'online') } : {}),
+              })}
+              title="Exportar Excel"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+            </button>
+            <button
+              onClick={() => exportApi.downloadPdf({
+                ...(manufacturerFilter ? { manufacturer: manufacturerFilter } : {}),
+                ...(modelFilter ? { model: modelFilter } : {}),
+                ...(statusFilter !== 'all' ? { online: String(statusFilter === 'online') } : {}),
+              })}
+              title="Exportar PDF"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" /> PDF
+            </button>
           </div>
         </div>
 
-        {isLoading ? <div className="p-8"><LoadingScreen /></div> : (
+        {isLoading ? (
+          <CardContent><LoadingScreen /></CardContent>
+        ) : devices.length === 0 ? (
+          <CardContent>
+            <div className="text-center py-12 text-slate-400">
+              <Router className="w-10 h-10 mx-auto mb-2 opacity-20" />
+              <p>Nenhum dispositivo encontrado</p>
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} className="mt-2 text-xs text-blue-500 hover:text-blue-700">
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+          </CardContent>
+        ) : (
           <>
             <Table>
               <thead>
@@ -136,53 +275,66 @@ export default function DevicesPage() {
                   <Th>Serial</Th>
                   <Th>Fabricante / Modelo</Th>
                   <Th>Firmware</Th>
-                  <Th>IP</Th>
+                  <Th>PPPoE / IP</Th>
                   <Th>Hosts</Th>
                   <Th>Último Inform</Th>
                   <Th></Th>
                 </tr>
               </thead>
               <tbody>
-                {devices.map((d) => {
-                  const id = (d._id || d.id) as string
-                  const serial = (d.serialNumber || id?.split('-').pop()) as string || '—'
+                {devices.map((d: Record<string, unknown>) => {
+                  const id = (d._id as string) || (d.id as string)
+                  const serial = (d.serialNumber as string) || id?.split('-').pop() || '—'
                   const online = d.online as boolean
                   const lastInform = d.lastInform as string
+                  const manufacturer = (d.manufacturer as string) || '—'
+                  const model = (d.model as string) || '—'
+                  const firmware = (d.softwareVersion as string) || ''
+                  const pppLogin = (d.pppLogin as string) || ''
+                  const ipv4 = (d.ipv4 as string) || ''
                   const hosts = ((d.hosts as unknown[]) || []).length
+
                   return (
-                    <tr key={id} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                    <tr key={id} className="hover:bg-slate-50 transition-colors">
                       <Td>
                         <div className="flex items-center gap-1.5">
                           {online
                             ? <Wifi className="w-3.5 h-3.5 text-emerald-500" />
-                            : <WifiOff className="w-3.5 h-3.5 text-red-400" />}
+                            : <WifiOff className="w-3.5 h-3.5 text-red-400" />
+                          }
                           <Badge variant={online ? 'green' : 'red'}>
                             {online ? 'Online' : 'Offline'}
                           </Badge>
                         </div>
                       </Td>
                       <Td>
-                        <Link
-                          to={`/devices/${encodeURIComponent(id)}`}
-                          className="text-blue-600 hover:text-blue-700 font-mono text-xs font-medium"
-                        >
+                        <Link to={`/devices/${encodeURIComponent(id)}`} className="text-blue-600 hover:text-blue-700 font-mono text-xs font-medium">
                           {serial}
                         </Link>
                       </Td>
                       <Td>
                         <div>
-                          <div className="text-xs font-medium text-slate-700">{(d.manufacturer as string) || '—'}</div>
-                          <div className="text-xs text-slate-400">{(d.model as string) || '—'}</div>
+                          <div className="text-xs font-medium text-slate-700">{manufacturer}</div>
+                          <div className="text-xs text-slate-400">{model}</div>
                         </div>
                       </Td>
-                      <Td className="font-mono text-xs text-slate-500">{(d.softwareVersion as string) || '—'}</Td>
-                      <Td className="font-mono text-xs">{(d.ipv4 as string) || '—'}</Td>
                       <Td>
-                        {hosts > 0 ? (
-                          <Badge variant="blue">{hosts} host{hosts !== 1 ? 's' : ''}</Badge>
-                        ) : (
-                          <span className="text-slate-400 text-xs">—</span>
-                        )}
+                        <span className="font-mono text-xs text-slate-500">
+                          {firmware || <span className="text-slate-300">—</span>}
+                        </span>
+                      </Td>
+                      <Td>
+                        <div className="text-xs">
+                          {pppLogin && <div className="text-slate-700 font-medium">{pppLogin}</div>}
+                          {ipv4 && <div className="font-mono text-slate-400">{ipv4}</div>}
+                          {!pppLogin && !ipv4 && <span className="text-slate-300">—</span>}
+                        </div>
+                      </Td>
+                      <Td>
+                        {hosts > 0
+                          ? <Badge variant="blue">{hosts}</Badge>
+                          : <span className="text-slate-300 text-xs">—</span>
+                        }
                       </Td>
                       <Td>
                         <div className="flex items-center gap-1 text-slate-500">
@@ -196,46 +348,40 @@ export default function DevicesPage() {
                       </Td>
                       <Td>
                         <button
-                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(id) }}
-                          title="Remover dispositivo"
-                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          onClick={() => setConfirmDelete(id)}
+                          className="text-slate-300 hover:text-red-500 p-1 rounded transition-colors"
+                          title="Remover"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </Td>
                     </tr>
                   )
                 })}
-                {devices.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-slate-400 text-sm">
-                      Nenhum dispositivo encontrado
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </Table>
 
             {/* Paginação */}
-            {total > limit && (
-              <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between">
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
                 <span className="text-xs text-slate-500">
-                  Página {page} de {Math.ceil(total / limit)}
+                  Página {page} de {totalPages} — {total} dispositivos
                 </span>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    onClick={() => setPage(p => p - 1)}
-                    className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors"
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
                   >
-                    Anterior
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
+                  <span className="text-xs font-medium text-slate-700 px-2">{page}</span>
                   <button
-                    disabled={page >= Math.ceil(total / limit)}
-                    onClick={() => setPage(p => p + 1)}
-                    className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
                   >
-                    Próxima
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>

@@ -10,7 +10,10 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { DevicesService } from './devices.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -149,5 +152,45 @@ export class DevicesController {
   @ApiOperation({ summary: 'Remover dispositivo do ACS' })
   async delete(@Param('id') id: string) {
     return this.devicesService.delete(id);
+  }
+
+  @Get('export/excel')
+  @ApiOperation({ summary: 'Exportar dispositivos para Excel (.xlsx)' })
+  async exportExcel(
+    @Query('manufacturer') manufacturer?: string,
+    @Query('model') model?: string,
+    @Query('online') online?: string,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const buf = await this.devicesService.exportToExcel({
+      manufacturer,
+      model,
+      online: online === 'true' ? true : online === 'false' ? false : undefined,
+    });
+    res!.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="dispositivos_${new Date().toISOString().slice(0, 10)}.xlsx"`,
+    });
+    return new StreamableFile(buf);
+  }
+
+  @Get('export/pdf')
+  @ApiOperation({ summary: 'Exportar dispositivos para PDF' })
+  async exportPdf(
+    @Query('manufacturer') manufacturer?: string,
+    @Query('model') model?: string,
+    @Query('online') online?: string,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const buf = await this.devicesService.exportToPdf({
+      manufacturer,
+      model,
+      online: online === 'true' ? true : online === 'false' ? false : undefined,
+    });
+    res!.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="dispositivos_${new Date().toISOString().slice(0, 10)}.pdf"`,
+    });
+    return new StreamableFile(buf);
   }
 }

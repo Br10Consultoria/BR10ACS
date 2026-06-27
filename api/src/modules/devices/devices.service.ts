@@ -260,6 +260,112 @@ export class DevicesService {
     };
   }
 
+  async exportToExcel(options: Omit<DeviceListOptions, 'page' | 'limit'> = {}): Promise<Buffer> {
+    const { data } = await this.list({ ...options, limit: 5000 });
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'BR10ACS';
+    const ws = wb.addWorksheet('Dispositivos');
+    ws.columns = [
+      { header: 'Serial', key: 'serial', width: 28 },
+      { header: 'Fabricante', key: 'manufacturer', width: 16 },
+      { header: 'Modelo', key: 'model', width: 16 },
+      { header: 'Firmware', key: 'firmware', width: 20 },
+      { header: 'Status', key: 'status', width: 10 },
+      { header: 'IP', key: 'ip', width: 16 },
+      { header: 'PPPoE', key: 'pppoe', width: 20 },
+      { header: 'Sinal RX (dBm)', key: 'rx', width: 14 },
+      { header: 'Sinal TX (dBm)', key: 'tx', width: 14 },
+      { header: 'Uptime', key: 'uptime', width: 12 },
+      { header: 'Ultimo Inform', key: 'lastInform', width: 22 },
+    ];
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+    for (const d of data) {
+      ws.addRow({
+        serial: d.serialNumber || d.id,
+        manufacturer: d.manufacturer || '',
+        model: d.model || '',
+        firmware: d.softwareVersion || '',
+        status: d.online ? 'Online' : 'Offline',
+        ip: d.ipv4 || '',
+        pppoe: d.pppLogin || '',
+        rx: d.rxPower ?? '',
+        tx: d.txPower ?? '',
+        uptime: d.uptime ? Math.round(d.uptime / 3600) + 'h' : '',
+        lastInform: d.lastInform ? new Date(d.lastInform).toLocaleString('pt-BR') : '',
+      });
+    }
+    ws.eachRow((row: any, rowNum: number) => {
+      if (rowNum === 1) return;
+      const statusCell = row.getCell('status');
+      if (statusCell.value === 'Offline') {
+        row.eachCell((cell: any) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; });
+      }
+    });
+    const buf = await wb.xlsx.writeBuffer();
+    return buf as Buffer;
+  }
+
+  async exportToPdf(options: Omit<DeviceListOptions, 'page' | 'limit'> = {}): Promise<Buffer> {
+    const { data } = await this.list({ ...options, limit: 5000 });
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const PDFDocument = require('pdfkit');
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+      doc.fontSize(16).fillColor('#1E40AF').text('BR10ACS - Relatorio de Dispositivos', { align: 'center' });
+      doc.fontSize(9).fillColor('#64748B').text(`Gerado em ${new Date().toLocaleString('pt-BR')} - ${data.length} dispositivos`, { align: 'center' });
+      doc.moveDown(0.5);
+      const cols = [
+        { label: 'Serial', w: 130 }, { label: 'Fabricante', w: 80 }, { label: 'Modelo', w: 80 },
+        { label: 'Status', w: 55 }, { label: 'IP', w: 90 }, { label: 'PPPoE', w: 100 },
+        { label: 'Sinal RX', w: 60 }, { label: 'Ultimo Inform', w: 110 },
+      ];
+      const startX = 40;
+      let y = doc.y;
+      doc.rect(startX, y, cols.reduce((s: number, c: any) => s + c.w, 0), 18).fill('#1E40AF');
+      let x = startX;
+      doc.fillColor('#FFFFFF').fontSize(8);
+      for (const col of cols) {
+        doc.text(col.label, x + 3, y + 4, { width: col.w - 6, lineBreak: false });
+        x += col.w;
+      }
+      y += 18;
+      doc.fillColor('#1E293B').fontSize(7.5);
+      let rowIdx = 0;
+      for (const d of data) {
+        if (y > 530) { doc.addPage(); y = 40; }
+        const bg = rowIdx % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
+        const totalW = cols.reduce((s: number, c: any) => s + c.w, 0);
+        doc.rect(startX, y, totalW, 16).fill(bg);
+        x = startX;
+        const row = [
+          d.serialNumber || d.id || '',
+          d.manufacturer || '',
+          d.model || '',
+          d.online ? 'Online' : 'Offline',
+          d.ipv4 || '',
+          d.pppLogin || '',
+          d.rxPower != null ? `${d.rxPower} dBm` : '-',
+          d.lastInform ? new Date(d.lastInform).toLocaleString('pt-BR') : '-',
+        ];
+        doc.fillColor(d.online ? '#1E293B' : '#DC2626');
+        for (let i = 0; i < cols.length; i++) {
+          doc.text(row[i], x + 3, y + 3, { width: cols[i].w - 6, lineBreak: false });
+          x += cols[i].w;
+        }
+        y += 16;
+        rowIdx++;
+      }
+      doc.end();
+    });
+  }
+
   private calculateWifiScore(device: NormalizedDevice): number | null {
     if (!device.wifiNetworks.length) return null;
     let score = 100;
