@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Link2, Plus, Trash2, CheckCircle, XCircle, RefreshCw,
-  Settings, ChevronDown, ChevronRight, ExternalLink, Search,
+  ChevronDown, ChevronRight, ExternalLink, Search,
   Zap, Eye, EyeOff, X, Info, User, Phone, Mail, MapPin,
-  Activity,
+  Activity, ToggleLeft, ToggleRight, Shield, Key, Globe,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui'
 import { integrationsApi } from '@/api'
@@ -313,7 +313,15 @@ function IntegrationWizard({ onClose, onSuccess }: WizardProps) {
 
 // ── Painel de Lookup ──────────────────────────────────────────────────────────
 
+const AUTH_ICONS: Record<string, React.ReactNode> = {
+  apikey_header: <Key className="w-3 h-3" />,
+  bearer:        <Shield className="w-3 h-3" />,
+  basic:         <Key className="w-3 h-3" />,
+  apikey_query:  <Globe className="w-3 h-3" />,
+}
+
 function LookupPanel({ integration }: { integration: Integration }) {
+  const [lookupType, setLookupType] = useState<'pppoe' | 'serial' | 'cpf'>('pppoe')
   const [query, setQuery] = useState('')
   const [result, setResult] = useState<CustomerResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -324,7 +332,8 @@ function LookupPanel({ integration }: { integration: Integration }) {
     setLoading(true)
     setResult(null)
     try {
-      const r = await integrationsApi.lookupCustomer(integration._id, { pppoe: query.trim() })
+      const params = { [lookupType]: query.trim() } as { pppoe?: string; serial?: string; cpf?: string }
+      const r = await integrationsApi.lookupCustomer(integration._id, params)
       setResult(r.data as CustomerResult)
     } catch {
       setResult({ found: false, error: 'Erro ao consultar o ERP' })
@@ -343,10 +352,26 @@ function LookupPanel({ integration }: { integration: Integration }) {
 
   return (
     <div className="mt-3 space-y-3">
+      {/* Tipo de busca */}
+      <div className="flex gap-2">
+        {(['pppoe', 'serial', 'cpf'] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => { setLookupType(t); setResult(null) }}
+            className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+              lookupType === t
+                ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                : 'border-slate-200 text-slate-500 hover:border-slate-300'
+            }`}
+          >
+            {t === 'pppoe' ? 'Login PPPoE' : t === 'serial' ? 'Serial' : 'CPF/CNPJ'}
+          </button>
+        ))}
+      </div>
       <div className="flex gap-2">
         <input
           type="text"
-          placeholder="PPPoE login, serial ou CPF..."
+          placeholder={`Buscar por ${lookupType === 'pppoe' ? 'login PPPoE' : lookupType === 'serial' ? 'serial' : 'CPF/CNPJ'}...`}
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleLookup()}
@@ -506,8 +531,15 @@ export default function IntegrationsPage() {
     }
   }
 
-  const erpIntegrations = integrations.filter(i => !['webhook', 'slack', 'telegram'].includes(i.type))
+  const [search, setSearch] = useState('')
+  const erpIntegrations = integrations.filter(i =>
+    !['webhook', 'slack', 'telegram'].includes(i.type) &&
+    (search === '' || i.name.toLowerCase().includes(search.toLowerCase()) || i.type.toLowerCase().includes(search.toLowerCase()))
+  )
   const webhookIntegrations = integrations.filter(i => ['webhook', 'slack', 'telegram'].includes(i.type))
+  const totalRequests = integrations.reduce((s, i) => s + (i.stats?.requests || 0), 0)
+  const totalErrors = integrations.reduce((s, i) => s + (i.stats?.errors || 0), 0)
+  const activeCount = integrations.filter(i => i.enabled).length
 
   return (
     <div className="space-y-6">
@@ -534,6 +566,24 @@ export default function IntegrationsPage() {
         </button>
       </div>
 
+      {/* Stats globais */}
+      {integrations.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: 'Integrações Ativas', value: `${activeCount} / ${integrations.length}`, color: 'text-green-600' },
+            { label: 'Total de Consultas', value: totalRequests.toLocaleString('pt-BR'), color: 'text-blue-600' },
+            { label: 'Erros Registrados', value: totalErrors.toLocaleString('pt-BR'), color: totalErrors > 0 ? 'text-red-600' : 'text-slate-500' },
+          ].map(s => (
+            <Card key={s.label}>
+              <CardContent className="py-4">
+                <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       {/* ERPs disponíveis */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {Object.entries(adapters).map(([key, a]) => {
@@ -557,12 +607,26 @@ export default function IntegrationsPage() {
       <Card>
         <CardHeader className="flex items-center justify-between">
           <CardTitle>Integrações ERP Configuradas</CardTitle>
-          <button
-            onClick={() => qc.invalidateQueries({ queryKey: ['integrations'] })}
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {integrations.length > 0 && (
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
+                />
+              </div>
+            )}
+            <button
+              onClick={() => qc.invalidateQueries({ queryKey: ['integrations'] })}
+              className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -611,10 +675,22 @@ export default function IntegrationsPage() {
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-slate-400 mt-0.5">
-                          {String(integration.config?.baseUrl || '—')} ·
-                          {integration.stats.requests} req · {integration.stats.errors} erros
-                          {integration.stats.lastUsed && ` · último uso: ${new Date(integration.stats.lastUsed).toLocaleDateString('pt-BR')}`}
+                        <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono truncate max-w-xs">{String(integration.config?.baseUrl || '—')}</span>
+                          <span>·</span>
+                          <span>{integration.stats?.requests || 0} req</span>
+                          {(integration.stats?.errors || 0) > 0 && (
+                            <><span>·</span><span className="text-red-500">{integration.stats.errors} erros</span></>
+                          )}
+                          {integration.stats?.lastUsed && (
+                            <><span>·</span><span>último uso: {new Date(integration.stats.lastUsed).toLocaleDateString('pt-BR')}</span></>
+                          )}
+                          {integration.config?.authType && (
+                            <span className="flex items-center gap-0.5 text-slate-400">
+                              · {AUTH_ICONS[String(integration.config.authType)] || null}
+                              {AUTH_LABELS[String(integration.config.authType)] || String(integration.config.authType)}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
@@ -638,7 +714,10 @@ export default function IntegrationsPage() {
                           }`}
                           title={integration.enabled ? 'Desativar' : 'Ativar'}
                         >
-                          <Settings className="w-4 h-4" />
+                          {integration.enabled
+                            ? <ToggleRight className="w-5 h-5" />
+                            : <ToggleLeft className="w-5 h-5" />
+                          }
                         </button>
                         <button
                           onClick={e => { e.stopPropagation(); deleteMut.mutate(integration._id) }}

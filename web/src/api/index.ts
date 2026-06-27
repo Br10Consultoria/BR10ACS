@@ -151,6 +151,7 @@ export const integrationsApi = {
   testConnection: (id: string) => api.post(`/integrations/${id}/test-connection`),
   lookupCustomer: (id: string, params: { pppoe?: string; serial?: string; cpf?: string }) =>
     api.get(`/integrations/${id}/lookup`, { params }),
+  toggle: (id: string, enabled: boolean) => api.put(`/integrations/${id}/toggle`, { enabled }),
 }
 
 export const exportApi = {

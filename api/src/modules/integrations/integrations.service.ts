@@ -252,21 +252,48 @@ export class IntegrationsService {
     const adapter = ERP_ADAPTERS[integration.type] ?? ERP_ADAPTERS['custom'];
     const cfg = integration.config || {};
     const baseURL = (cfg.baseUrl as string) || adapter.defaultBaseUrl;
+    const axiosCfg = this.buildAxiosConfig(integration, adapter);
 
-    try {
-      const axiosCfg = this.buildAxiosConfig(integration, adapter);
-      const start = Date.now();
-      const res = await axios.get(baseURL, { ...axiosCfg, timeout: 8000 });
-      const latencyMs = Date.now() - start;
-      return { ok: true, statusCode: res.status, message: 'Conexão bem-sucedida', latencyMs };
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { status: number }; message?: string };
-      const statusCode = axiosErr?.response?.status;
-      if (statusCode === 401 || statusCode === 403) {
-        return { ok: true, statusCode, message: 'URL acessível (verifique as credenciais)' };
+    // Tenta o endpoint real de lookup com valor fictício para testar autenticação
+    const endpoint = (cfg.customerEndpoint as typeof adapter.customerEndpoint) || adapter.customerEndpoint;
+    if (endpoint?.path) {
+      const testParams = endpoint.queryParam ? { [endpoint.queryParam]: '__test__' } : {};
+      try {
+        const start = Date.now();
+        const res = await axios.get(endpoint.path, {
+          ...axiosCfg,
+          params: { ...(axiosCfg.params || {}), ...testParams },
+          timeout: 8000,
+          validateStatus: (s) => s < 500, // aceita 4xx como resposta válida
+        });
+        const latencyMs = Date.now() - start;
+        const statusCode = res.status;
+        if (statusCode === 401 || statusCode === 403) {
+          return { ok: false, statusCode, message: 'Credenciais inválidas ou sem permissão', latencyMs };
+        }
+        return { ok: true, statusCode, message: 'Conexão e autenticação bem-sucedidas', latencyMs };
+      } catch (err: unknown) {
+        // Endpoint falhou — tenta URL base como fallback
       }
+    }
+
+    // Fallback: testa apenas a URL base
+    try {
+      const start = Date.now();
+      const res = await axios.get(baseURL, {
+        ...axiosCfg,
+        timeout: 8000,
+        validateStatus: () => true,
+      });
+      const latencyMs = Date.now() - start;
+      const statusCode = res.status;
+      if (statusCode === 401 || statusCode === 403) {
+        return { ok: false, statusCode, message: 'Credenciais inválidas ou sem permissão', latencyMs };
+      }
+      return { ok: true, statusCode, message: 'URL acessível', latencyMs };
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      return { ok: false, statusCode, message: msg };
+      return { ok: false, message: `Falha na conexão: ${msg}` };
     }
   }
 

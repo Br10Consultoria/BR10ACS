@@ -80,7 +80,16 @@ export class IntegrationsController {
     return this.integrationsService.lookupCustomer(id, { pppoe, serial, cpf });
   }
 
-  // ── Teste de conexão ──────────────────────────────────────────────────────
+  // ── Toggle enable/disable ──────────────────────────────────────────────────────
+
+  @Put(':id/toggle')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Ativar ou desativar integração' })
+  async toggle(@Param('id') id: string, @Body() body: { enabled: boolean }) {
+    return this.integrationsService.update(id, { enabled: body.enabled });
+  }
+
+  // ── Webhook (compatibilidade) ──────────────────────────────────────────────────────
 
   @Post(':id/test-connection')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)

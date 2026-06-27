@@ -8,7 +8,10 @@ export class Integration {
   @Prop({ required: true, unique: true })
   name: string;
 
-  @Prop({ required: true, enum: ['ixc', 'mk', 'sgp', 'voalle', 'webhook', 'slack', 'telegram', 'custom'] })
+  @Prop({
+    required: true,
+    enum: ['ixc', 'mk', 'sgp', 'hubsoft', 'leaf', 'spify', 'voalle', 'webhook', 'slack', 'telegram', 'custom'],
+  })
   type: string;
 
   @Prop({ default: false })
@@ -17,7 +20,11 @@ export class Integration {
   @Prop({ type: Object, default: {} })
   config: Record<string, any>;
 
-  @Prop({ type: Object, default: {} })
+  /** Mapeamento de campos personalizado (sobrescreve o adaptador padrão) */
+  @Prop({ type: Object, default: null })
+  fieldMap: Record<string, string> | null;
+
+  @Prop({ type: Object, default: { requests: 0, errors: 0 } })
   stats: {
     requests: number;
     errors: number;
