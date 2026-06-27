@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Router, Wifi, WifiOff, Activity, Signal, AlertTriangle,
-  Clock, ArrowRight, X, ChevronRight,
+  Clock, ArrowRight, X, ChevronRight, Wrench, CheckCircle2, XCircle,
 } from 'lucide-react'
-import { devicesApi, alertsApi } from '@/api'
+import { devicesApi, alertsApi, logsApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, Badge, LoadingScreen, Table, Th, Td } from '@/components/ui'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -179,6 +179,83 @@ function DrillModal({ target, devices, onClose }: DrillModalProps) {
         </div>
       </div>
     </div>
+  )
+}
+
+function InterventionsCard() {
+  const { data: logsData } = useQuery({
+    queryKey: ['interventions-recent'],
+    queryFn: () => logsApi.list({ limit: 20, category: 'device' }).then(r => r.data),
+    refetchInterval: 30000,
+  })
+
+  const logs: Record<string, unknown>[] = (logsData as { data?: Record<string, unknown>[] })?.data
+    || (Array.isArray(logsData) ? logsData : [])
+
+  // Filtra apenas logs de intervenções (não inclui sync/inform automáticos)
+  const interventions = logs.filter(l => {
+    const msg = (l.message as string || '').toLowerCase()
+    return msg.includes('reboot') || msg.includes('factory') || msg.includes('wi-fi') ||
+      msg.includes('ssid') || msg.includes('senha') || msg.includes('tag') ||
+      msg.includes('parâmetro') || msg.includes('atualização') || msg.includes('firmware') ||
+      msg.includes('sincronizado') || msg.includes('refresh')
+  })
+
+  const levelIcon = (level: string) => {
+    if (level === 'error') return <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+    if (level === 'warn') return <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+    return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Wrench className="w-4 h-4 text-slate-500" />
+          <CardTitle>Intervenções Recentes</CardTitle>
+        </div>
+        <Link to="/logs?category=device" className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium">
+          Ver todos os logs <ArrowRight className="w-3 h-3" />
+        </Link>
+      </CardHeader>
+      <CardContent className="p-0">
+        {interventions.length === 0 ? (
+          <div className="text-center py-8 text-slate-400 text-sm px-4">
+            Nenhuma intervenção registrada recentemente
+            <p className="text-xs mt-1">As intervenções aparecem após operações como Reboot, alteração de Wi-Fi, etc.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {interventions.slice(0, 8).map((log, i) => {
+              const deviceId = log.deviceId as string
+              const serial = deviceId ? deviceId.split('-').pop() || deviceId : '—'
+              return (
+                <div key={i} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                  {levelIcon(log.level as string)}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-700 truncate">{log.message as string}</div>
+                    {deviceId && (
+                      <Link
+                        to={`/devices/${encodeURIComponent(deviceId)}`}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-mono mt-0.5 inline-block"
+                      >
+                        {serial}
+                      </Link>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-400 flex-shrink-0 text-right">
+                    {log.date
+                      ? formatDistanceToNow(new Date(log.date as string), { addSuffix: true, locale: ptBR })
+                      : '—'
+                    }
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -358,6 +435,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Relatório de Intervenções Recentes */}
+      <InterventionsCard />
 
       {/* Dispositivos recentes */}
       <Card>

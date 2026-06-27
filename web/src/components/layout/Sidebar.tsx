@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Router, FileText, Settings, Users,
-  LogOut, ChevronRight, Wifi, Activity, Layers, HardDrive, Code2, Bell, Cpu, Link2
+  LogOut, ChevronRight, Wifi, Activity, Layers, HardDrive, Code2, Bell, Cpu, Link2, Sparkles
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/alerts', icon: Bell, label: 'Alertas', badge: true },
   { to: '/logs', icon: FileText, label: 'Logs' },
   { to: '/mass-ops', icon: Activity, label: 'Operações em Massa' },
+  { to: '/ai-analysis', icon: Sparkles, label: 'Análise IA' },
 ]
 
 const genieItems = [

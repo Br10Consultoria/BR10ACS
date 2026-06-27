@@ -79,6 +79,15 @@ export class DevicesController {
     @Query('limit') limit?: number,
   ) {
     const device = await this.devicesService.getById(id);
+    // O collector grava deviceId como normalized.id (o _id completo do GenieACS)
+    // Tenta primeiro com device.id; se não houver resultados, tenta com serialNumber
+    const results = await this.devicesService.getTimeSeries(
+      device.id,
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+      limit,
+    );
+    if (results.length > 0) return results;
     return this.devicesService.getTimeSeries(
       device.serialNumber,
       from ? new Date(from) : undefined,

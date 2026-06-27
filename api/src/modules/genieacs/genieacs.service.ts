@@ -199,19 +199,37 @@ export class GenieAcsService implements OnModuleInit {
   // ─── Diagnósticos ─────────────────────────────────────────────────────────
 
   async ping(deviceId: string, host: string): Promise<any> {
-    return this.setParameterValues(deviceId, [
+    // Tenta TR-098 (InternetGatewayDevice) e TR-181 (Device) em paralelo
+    const tr098 = this.setParameterValues(deviceId, [
       ['InternetGatewayDevice.IPPingDiagnostics.DiagnosticsState', 'Requested', 'xsd:string'],
       ['InternetGatewayDevice.IPPingDiagnostics.Host', host, 'xsd:string'],
       ['InternetGatewayDevice.IPPingDiagnostics.NumberOfRepetitions', 4, 'xsd:unsignedInt'],
       ['InternetGatewayDevice.IPPingDiagnostics.Timeout', 1000, 'xsd:unsignedInt'],
-    ]);
+    ]).catch(() => null);
+    const tr181 = this.setParameterValues(deviceId, [
+      ['Device.IP.Diagnostics.IPPing.DiagnosticsState', 'Requested', 'xsd:string'],
+      ['Device.IP.Diagnostics.IPPing.Host', host, 'xsd:string'],
+      ['Device.IP.Diagnostics.IPPing.NumberOfRepetitions', 4, 'xsd:unsignedInt'],
+      ['Device.IP.Diagnostics.IPPing.Timeout', 1000, 'xsd:unsignedInt'],
+    ]).catch(() => null);
+    const [r098, r181] = await Promise.all([tr098, tr181]);
+    return r098 || r181;
   }
 
   async traceroute(deviceId: string, host: string): Promise<any> {
-    return this.setParameterValues(deviceId, [
+    // Tenta TR-098 (InternetGatewayDevice) e TR-181 (Device) em paralelo
+    const tr098 = this.setParameterValues(deviceId, [
       ['InternetGatewayDevice.TraceRouteDiagnostics.DiagnosticsState', 'Requested', 'xsd:string'],
       ['InternetGatewayDevice.TraceRouteDiagnostics.Host', host, 'xsd:string'],
-    ]);
+      ['InternetGatewayDevice.TraceRouteDiagnostics.MaxHopCount', 30, 'xsd:unsignedInt'],
+    ]).catch(() => null);
+    const tr181 = this.setParameterValues(deviceId, [
+      ['Device.IP.Diagnostics.TraceRoute.DiagnosticsState', 'Requested', 'xsd:string'],
+      ['Device.IP.Diagnostics.TraceRoute.Host', host, 'xsd:string'],
+      ['Device.IP.Diagnostics.TraceRoute.MaxHopCount', 30, 'xsd:unsignedInt'],
+    ]).catch(() => null);
+    const [r098, r181] = await Promise.all([tr098, tr181]);
+    return r098 || r181;
   }
 
   // ─── Connection Request ───────────────────────────────────────────────────

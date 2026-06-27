@@ -12,7 +12,7 @@ import { formatDistanceToNow, format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Legend
 } from 'recharts'
 
@@ -202,6 +202,34 @@ export default function DeviceDetailPage() {
         rx: p.rxDbm != null ? Number(p.rxDbm) : null,
         tx: p.txDbm != null ? Number(p.txDbm) : null,
       })).reverse()
+    : []
+
+  // Gráfico de banda: calcula delta de bytes entre pontos consecutivos
+  const bandwidthData = Array.isArray(timeSeries) && timeSeries.length > 1
+    ? (() => {
+        const sorted = [...timeSeries].reverse() // mais antigo primeiro
+        const result: { time: string; downMbps: number | null; upMbps: number | null }[] = []
+        for (let i = 1; i < sorted.length; i++) {
+          const prev = sorted[i - 1] as Record<string, unknown>
+          const curr = sorted[i] as Record<string, unknown>
+          const prevTs = prev.timestamp ? new Date(prev.timestamp as string).getTime() : 0
+          const currTs = curr.timestamp ? new Date(curr.timestamp as string).getTime() : 0
+          const dtSec = (currTs - prevTs) / 1000
+          if (dtSec <= 0) continue
+          const prevDown = prev.totalBytesReceived != null ? Number(prev.totalBytesReceived) : null
+          const currDown = curr.totalBytesReceived != null ? Number(curr.totalBytesReceived) : null
+          const prevUp = prev.totalBytesSent != null ? Number(prev.totalBytesSent) : null
+          const currUp = curr.totalBytesSent != null ? Number(curr.totalBytesSent) : null
+          const deltaDown = prevDown != null && currDown != null && currDown >= prevDown ? currDown - prevDown : null
+          const deltaUp = prevUp != null && currUp != null && currUp >= prevUp ? currUp - prevUp : null
+          result.push({
+            time: curr.timestamp ? format(new Date(curr.timestamp as string), 'HH:mm') : '',
+            downMbps: deltaDown != null ? Math.round((deltaDown * 8) / dtSec / 1000) / 1000 : null, // Mbps
+            upMbps: deltaUp != null ? Math.round((deltaUp * 8) / dtSec / 1000) / 1000 : null,
+          })
+        }
+        return result
+      })()
     : []
 
   return (
@@ -541,6 +569,57 @@ export default function DeviceDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Gráfico de banda consumida por período */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Banda Consumida (Mbps por período)</CardTitle>
+                <div className="flex items-center gap-3 text-xs text-slate-400">
+                  {d.wanBytesReceived != null && (
+                    <span>Total DL: <strong className="text-blue-600">{formatBytes(d.wanBytesReceived as number)}</strong></span>
+                  )}
+                  {d.wanBytesSent != null && (
+                    <span>Total UL: <strong className="text-emerald-600">{formatBytes(d.wanBytesSent as number)}</strong></span>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {bandwidthData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                  <Signal className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-sm">Dados de banda não disponíveis</p>
+                  <p className="text-xs mt-1">Necessário pelo menos 2 ciclos de coleta com dados de tráfego</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <AreaChart data={bandwidthData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="gradDown" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="gradUp" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} domain={[0, 'auto']} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                      formatter={(value, name) => [value != null ? `${Number(value).toFixed(3)} Mbps` : '—', name === 'downMbps' ? 'Download' : 'Upload']}
+                    />
+                    <Legend formatter={(v) => v === 'downMbps' ? 'Download (Mbps)' : 'Upload (Mbps)'} />
+                    <Area type="monotone" dataKey="downMbps" stroke="#3b82f6" strokeWidth={2} fill="url(#gradDown)" dot={false} connectNulls />
+                    <Area type="monotone" dataKey="upMbps" stroke="#10b981" strokeWidth={2} fill="url(#gradUp)" dot={false} connectNulls />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -745,7 +824,7 @@ function useDiagnostic(deviceId: string, type: 'ping' | 'traceroute' | 'speedtes
             setLoading(false)
             clearInterval(interval)
             pollTimerRef.current = null
-          } else if (attempts >= 20) {
+          } else if (attempts >= (type === 'traceroute' ? 30 : 20)) {
             setStatus('Timeout: dispositivo nao respondeu')
             setLoading(false)
             clearInterval(interval)
@@ -1010,6 +1089,11 @@ function WifiTab({ deviceId, device }: { deviceId: string; device: Record<string
   const qc = useQueryClient()
   const networks: Record<string, unknown>[] = (device.wifiNetworks as Record<string, unknown>[]) || []
 
+  // Filtro de redes ativas
+  const [showOnlyActive, setShowOnlyActive] = React.useState(false)
+  const visibleNetworks = showOnlyActive ? networks.filter(n => n.enabled === true) : networks
+  const activeCount = networks.filter(n => n.enabled === true).length
+
   // Estado de edição por rede (índice)
   const [editing, setEditing] = React.useState<number | null>(null)
   const [editSsid, setEditSsid] = React.useState('')
@@ -1049,8 +1133,25 @@ function WifiTab({ deviceId, device }: { deviceId: string; device: Record<string
 
   return (
     <div className="space-y-4">
+      {/* Barra de filtro */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Wifi className="w-4 h-4" />
+          <span>{networks.length} redes · <span className="text-emerald-600 font-medium">{activeCount} ativas</span></span>
+        </div>
+        <button
+          onClick={() => setShowOnlyActive(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+            showOnlyActive
+              ? 'bg-emerald-600 text-white border-emerald-600'
+              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          {showOnlyActive ? 'Mostrando apenas ativas' : 'Filtrar: apenas ativas'}
+        </button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {networks.map((net, i) => (
+        {visibleNetworks.map((net, i) => (
           <Card key={i}>
             <CardHeader className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1144,11 +1245,13 @@ function WifiTab({ deviceId, device }: { deviceId: string; device: Record<string
             </CardContent>
           </Card>
         ))}
-        {networks.length === 0 && (
+        {visibleNetworks.length === 0 && (
           <div className="col-span-2 text-center py-12 text-slate-400">
             <Wifi className="w-10 h-10 mx-auto mb-2 opacity-20" />
-            <p>Nenhuma rede Wi-Fi coletada para este dispositivo</p>
-            <p className="text-xs mt-1">Execute um Refresh para coletar os dados</p>
+            {networks.length === 0
+              ? <><p>Nenhuma rede Wi-Fi coletada para este dispositivo</p><p className="text-xs mt-1">Execute um Refresh para coletar os dados</p></>
+              : <><p>Nenhuma rede Wi-Fi ativa</p><button onClick={() => setShowOnlyActive(false)} className="text-xs text-blue-600 mt-1 hover:underline">Mostrar todas as redes</button></>
+            }
           </div>
         )}
       </div>

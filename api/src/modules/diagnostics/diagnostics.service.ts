@@ -120,9 +120,13 @@ export class DiagnosticsService {
   async getPingResult(deviceId: string): Promise<any> {
     const device = await this.genieAcsService.getDevice(deviceId, [
       'InternetGatewayDevice.IPPingDiagnostics',
+      'Device.IP.Diagnostics.IPPing',
     ]);
     if (!device) return null;
-    const diag = device?.InternetGatewayDevice?.IPPingDiagnostics;
+    // Tenta TR-098 primeiro, depois TR-181
+    const diag098 = device?.InternetGatewayDevice?.IPPingDiagnostics;
+    const diag181 = device?.Device?.IP?.Diagnostics?.IPPing;
+    const diag = diag098 || diag181;
     if (!diag) return null;
     return {
       state: diag.DiagnosticsState?._value,
@@ -138,9 +142,13 @@ export class DiagnosticsService {
   async getTracerouteResult(deviceId: string): Promise<any> {
     const device = await this.genieAcsService.getDevice(deviceId, [
       'InternetGatewayDevice.TraceRouteDiagnostics',
+      'Device.IP.Diagnostics.TraceRoute',
     ]);
     if (!device) return null;
-    const diag = device?.InternetGatewayDevice?.TraceRouteDiagnostics;
+    // Tenta TR-098 primeiro, depois TR-181
+    const diag098 = device?.InternetGatewayDevice?.TraceRouteDiagnostics;
+    const diag181 = device?.Device?.IP?.Diagnostics?.TraceRoute;
+    const diag = diag098 || diag181;
     if (!diag) return null;
     return {
       state: diag.DiagnosticsState?._value,
