@@ -187,7 +187,13 @@ export default function DashboardPage() {
 
   const { data: stats } = useQuery({
     queryKey: ['device-stats'],
-    queryFn: () => devicesApi.stats().then((r: { data: unknown }) => r.data),
+    queryFn: () => devicesApi.stats().then((r: { data: unknown }) => r.data as {
+      total?: number
+      online?: number
+      offline?: number
+      avgRxDbm?: number | null
+      criticalSignal?: number
+    }),
     refetchInterval: 60000,
   })
 
