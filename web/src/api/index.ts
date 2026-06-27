@@ -56,6 +56,7 @@ export const settingsApi = {
     api.put('/settings', {
       settings: Object.entries(settings).map(([key, value]) => ({ key, value })),
     }),
+  testSmtp: () => api.post<{ ok: boolean; error?: string }>('/settings/test-smtp'),
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────

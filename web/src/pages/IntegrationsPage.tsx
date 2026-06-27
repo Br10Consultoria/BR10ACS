@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronRight, ExternalLink, Search,
   Zap, Eye, EyeOff, X, Info, User, Phone, Mail, MapPin,
   Activity, ToggleLeft, ToggleRight, Shield, Key, Globe,
+  Settings2, Save,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui'
 import { integrationsApi } from '@/api'
@@ -17,6 +18,13 @@ interface Adapter {
   description: string
   authType: string
   docsUrl?: string
+}
+
+interface ActionEndpoint {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  path: string
+  bodyTemplate?: Record<string, unknown>
+  successStatus?: number[]
 }
 
 interface Integration {
@@ -311,6 +319,192 @@ function IntegrationWizard({ onClose, onSuccess }: WizardProps) {
   )
 }
 
+// ── Modal de Edição de Endpoints de Ação ─────────────────────────────────────
+
+const ACTION_LABELS: Record<string, { label: string; description: string; color: string }> = {
+  suspend:     { label: 'Suspender',  description: 'Suspende o contrato do cliente no ERP',          color: 'text-red-600' },
+  reactivate:  { label: 'Reativar',   description: 'Reativa o contrato do cliente no ERP',            color: 'text-green-600' },
+  open_ticket: { label: 'Abrir OS',   description: 'Abre uma ordem de serviço no ERP',                color: 'text-blue-600' },
+}
+
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+
+interface ActionEditorProps {
+  integration: Integration
+  onClose: () => void
+  onSaved: () => void
+}
+
+function ActionEndpointsEditor({ integration, onClose, onSaved }: ActionEditorProps) {
+  const qc = useQueryClient()
+
+  // Inicializa com os actionEndpoints já salvos no config, ou defaults
+  const initEndpoints = (): Record<string, ActionEndpoint> => {
+    const saved = integration.config?.actionEndpoints as Record<string, ActionEndpoint> | undefined
+    return {
+      suspend:     saved?.suspend     ?? { method: 'POST', path: '/api/clientes/{id}/suspender', bodyTemplate: {} },
+      reactivate:  saved?.reactivate  ?? { method: 'POST', path: '/api/clientes/{id}/reativar',  bodyTemplate: {} },
+      open_ticket: saved?.open_ticket ?? { method: 'POST', path: '/api/os', bodyTemplate: { cliente_id: '{id}' } },
+    }
+  }
+
+  const [endpoints, setEndpoints] = useState<Record<string, ActionEndpoint>>(initEndpoints)
+  const [bodyRaw, setBodyRaw] = useState<Record<string, string>>(() => {
+    const init = initEndpoints()
+    return Object.fromEntries(
+      Object.entries(init).map(([k, v]) => [k, JSON.stringify(v.bodyTemplate ?? {}, null, 2)])
+    )
+  })
+  const [bodyErrors, setBodyErrors] = useState<Record<string, string>>({})
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      // Valida e mescla bodyTemplates
+      const parsed: Record<string, ActionEndpoint> = {}
+      const errors: Record<string, string> = {}
+      for (const key of Object.keys(endpoints)) {
+        try {
+          const bt = JSON.parse(bodyRaw[key] || '{}')
+          parsed[key] = { ...endpoints[key], bodyTemplate: bt }
+        } catch {
+          errors[key] = 'JSON inválido'
+        }
+      }
+      if (Object.keys(errors).length > 0) {
+        setBodyErrors(errors)
+        throw new Error('JSON inválido em um ou mais campos')
+      }
+      setBodyErrors({})
+      return integrationsApi.update(integration._id, {
+        config: { ...integration.config, actionEndpoints: parsed },
+      })
+    },
+    onSuccess: () => {
+      toast.success('Endpoints de ação salvos')
+      qc.invalidateQueries({ queryKey: ['integrations'] })
+      onSaved()
+      onClose()
+    },
+    onError: (err: Error) => toast.error(err.message || 'Erro ao salvar'),
+  })
+
+  const setField = (action: string, field: keyof ActionEndpoint, value: string) => {
+    setEndpoints(prev => ({ ...prev, [action]: { ...prev[action], [field]: value } }))
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
+              <Settings2 className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-800">Endpoints de Ação ERP</h3>
+              <p className="text-xs text-slate-400">{integration.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2">
+            <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-700">
+              Use <code className="bg-blue-100 px-1 rounded">{'{id}'}</code> como placeholder para o ID do cliente no ERP.
+              Os endpoints configurados aqui sobrescrevem os padrões do adaptador.
+            </p>
+          </div>
+
+          {Object.entries(ACTION_LABELS).map(([actionKey, meta]) => {
+            const ep = endpoints[actionKey]
+            return (
+              <div key={actionKey} className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-semibold text-sm ${meta.color}`}>{meta.label}</span>
+                    <span className="text-xs text-slate-400">—</span>
+                    <span className="text-xs text-slate-500">{meta.description}</span>
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex gap-3">
+                    <div className="w-32 flex-shrink-0">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Método HTTP</label>
+                      <select
+                        value={ep.method}
+                        onChange={e => setField(actionKey, 'method', e.target.value)}
+                        className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        {HTTP_METHODS.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Path da requisição</label>
+                      <input
+                        type="text"
+                        value={ep.path}
+                        onChange={e => setField(actionKey, 'path', e.target.value)}
+                        placeholder="/api/clientes/{id}/suspender"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Body Template <span className="text-slate-400 font-normal">(JSON — use {'{id}'} para o ID do cliente)</span>
+                    </label>
+                    <textarea
+                      value={bodyRaw[actionKey]}
+                      onChange={e => setBodyRaw(prev => ({ ...prev, [actionKey]: e.target.value }))}
+                      rows={3}
+                      className={`w-full px-3 py-2 border rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
+                        bodyErrors[actionKey] ? 'border-red-400 bg-red-50' : 'border-slate-200'
+                      }`}
+                    />
+                    {bodyErrors[actionKey] && (
+                      <p className="text-xs text-red-500 mt-1">{bodyErrors[actionKey]}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 flex-shrink-0">
+          <p className="text-xs text-slate-400">
+            Alterações afetam apenas esta integração
+          </p>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg">
+              Cancelar
+            </button>
+            <button
+              onClick={() => saveMut.mutate()}
+              disabled={saveMut.isPending}
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+            >
+              {saveMut.isPending
+                ? <><RefreshCw className="w-4 h-4 animate-spin" /> Salvando...</>
+                : <><Save className="w-4 h-4" /> Salvar Endpoints</>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Painel de Lookup ──────────────────────────────────────────────────────────
 
 const AUTH_ICONS: Record<string, ReactElement> = {
@@ -488,6 +682,7 @@ export default function IntegrationsPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string; latencyMs?: number }>>({})
+  const [editingActionsFor, setEditingActionsFor] = useState<Integration | null>(null)
 
   const { data: integrations = [], isLoading } = useQuery({
     queryKey: ['integrations'],
@@ -547,6 +742,14 @@ export default function IntegrationsPage() {
         <IntegrationWizard
           onClose={() => setShowWizard(false)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ['integrations'] })}
+        />
+      )}
+
+      {editingActionsFor && (
+        <ActionEndpointsEditor
+          integration={editingActionsFor}
+          onClose={() => setEditingActionsFor(null)}
+          onSaved={() => setEditingActionsFor(null)}
         />
       )}
 
@@ -642,6 +845,7 @@ export default function IntegrationsPage() {
               {erpIntegrations.map(integration => {
                 const adapter = adapters[integration.type]
                 const testResult = testResults[integration._id]
+                const hasCustomActions = !!(integration.config?.actionEndpoints)
                 return (
                   <div key={integration._id}>
                     <div
@@ -651,7 +855,7 @@ export default function IntegrationsPage() {
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
                         integration.enabled ? 'bg-green-100' : 'bg-slate-100'
                       }`}>
-                        <Link2 className={`w-5 h-5 ${integration.enabled ? 'text-green-600' : 'text-slate-400'}`} />
+                        <Link2 className={`w-4 h-4 ${integration.enabled ? 'text-green-600' : 'text-slate-400'}`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -664,6 +868,11 @@ export default function IntegrationsPage() {
                           {adapter && (
                             <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">
                               {adapter.label}
+                            </span>
+                          )}
+                          {hasCustomActions && (
+                            <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1">
+                              <Settings2 className="w-3 h-3" /> Endpoints customizados
                             </span>
                           )}
                           {testResult && (
@@ -694,6 +903,14 @@ export default function IntegrationsPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
+                        {/* Botão de configurar endpoints de ação */}
+                        <button
+                          onClick={e => { e.stopPropagation(); setEditingActionsFor(integration) }}
+                          className="text-slate-400 hover:text-purple-600 p-1.5 rounded-lg hover:bg-purple-50 transition-colors"
+                          title="Configurar endpoints de ação"
+                        >
+                          <Settings2 className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={e => { e.stopPropagation(); handleTestConnection(integration._id) }}
                           disabled={testingId === integration._id}

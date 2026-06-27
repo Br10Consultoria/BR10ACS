@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, Shield, Bell, Database } from 'lucide-react'
+import { Save, RefreshCw, Shield, Bell, Database, Mail, Send } from 'lucide-react'
 import { settingsApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, LoadingScreen } from '@/components/ui'
 import toast from 'react-hot-toast'
@@ -62,11 +62,26 @@ const sections = [
       { key: 'notifications.webhook.secret', label: 'Secret (opcional)', type: 'password', placeholder: 'meu-secret', hint: 'Enviado no header X-BR10ACS-Secret para validação' },
     ] as SettingField[],
   },
+  {
+    title: 'Notificações — E-mail (SMTP)',
+    icon: Mail,
+    fields: [
+      { key: 'notifications.smtp.enabled', label: 'Habilitar E-mail', type: 'toggle', hint: 'Envia alertas por e-mail via servidor SMTP' },
+      { key: 'notifications.smtp.host', label: 'Servidor SMTP', type: 'text', placeholder: 'smtp.gmail.com', hint: 'Ex: smtp.gmail.com, smtp.office365.com, mail.suaempresa.com' },
+      { key: 'notifications.smtp.port', label: 'Porta SMTP', type: 'number', placeholder: '587', hint: '587 (TLS/STARTTLS) · 465 (SSL) · 25 (sem criptografia)' },
+      { key: 'notifications.smtp.secure', label: 'Usar SSL/TLS (porta 465)', type: 'toggle', hint: 'Ative apenas se usar a porta 465. Para porta 587 (STARTTLS), deixe desativado.' },
+      { key: 'notifications.smtp.user', label: 'Usuário SMTP', type: 'text', placeholder: 'alertas@suaempresa.com', hint: 'Geralmente o próprio endereço de e-mail' },
+      { key: 'notifications.smtp.pass', label: 'Senha SMTP', type: 'password', placeholder: '••••••••', hint: 'Para Gmail: use uma App Password (Senha de aplicativo), não a senha da conta' },
+      { key: 'notifications.smtp.from', label: 'Remetente', type: 'text', placeholder: 'BR10ACS <alertas@suaempresa.com>', hint: 'Endereço que aparecerá no campo "De" do e-mail' },
+      { key: 'notifications.smtp.to', label: 'Destinatário(s)', type: 'text', placeholder: 'noc@suaempresa.com, ti@suaempresa.com', hint: 'Separe múltiplos destinatários com vírgula' },
+    ] as SettingField[],
+  },
 ]
 
 export default function SettingsPage() {
   const qc = useQueryClient()
   const [values, setValues] = useState<Record<string, unknown>>({})
+  const [testingSmtp, setTestingSmtp] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -88,6 +103,24 @@ export default function SettingsPage() {
 
   const setValue = (key: string, value: unknown) => {
     setValues(prev => ({ ...prev, [key]: value }))
+  }
+
+  const testSmtp = async () => {
+    setTestingSmtp(true)
+    try {
+      // Salva primeiro para garantir que os valores mais recentes estão no banco
+      await settingsApi.updateMany(values)
+      const res = await settingsApi.testSmtp()
+      if (res.data?.ok) {
+        toast.success('E-mail de teste enviado com sucesso! Verifique sua caixa de entrada.')
+      } else {
+        toast.error(`Falha no teste SMTP: ${res.data?.error || 'erro desconhecido'}`)
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao testar SMTP: ${err?.response?.data?.message || err?.message}`)
+    } finally {
+      setTestingSmtp(false)
+    }
   }
 
   if (isLoading) return <LoadingScreen />
@@ -145,7 +178,19 @@ export default function SettingsPage() {
         </Card>
       ))}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={testSmtp}
+          disabled={testingSmtp}
+          className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-medium text-sm rounded-lg transition-colors"
+        >
+          {testingSmtp ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+          Testar E-mail SMTP
+        </button>
         <button
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending}

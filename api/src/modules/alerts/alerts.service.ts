@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import axios from 'axios';
+import * as nodemailer from 'nodemailer';
 import { Alert, AlertDocument, AlertType, AlertSeverity } from './schemas/alert.schema';
 import { SettingsService } from '../settings/settings.service';
 
@@ -174,6 +175,8 @@ export class AlertsService {
       await this.sendTelegram(alert);
       // Webhook genérico
       await this.sendWebhook(alert);
+      // E-mail SMTP
+      await this.sendEmail(alert);
       // Marca como notificado
       await this.alertModel.findByIdAndUpdate(alert._id, {
         $set: { notified: true, notifiedAt: new Date() },
@@ -229,6 +232,53 @@ export class AlertsService {
       this.logger.debug(`Webhook: alerta enviado para ${webhookUrl}`);
     } catch (err: any) {
       this.logger.warn(`Webhook falhou: ${err?.message}`);
+    }
+  }
+
+  private async sendEmail(alert: AlertDocument): Promise<void> {
+    const enabled = await this.settingsService.get('notifications.smtp.enabled') as boolean;
+    if (!enabled) return;
+
+    const host     = await this.settingsService.get('notifications.smtp.host')     as string;
+    const port     = await this.settingsService.get('notifications.smtp.port')     as number || 587;
+    const secure   = await this.settingsService.get('notifications.smtp.secure')   as boolean || false;
+    const user     = await this.settingsService.get('notifications.smtp.user')     as string;
+    const pass     = await this.settingsService.get('notifications.smtp.pass')     as string;
+    const from     = await this.settingsService.get('notifications.smtp.from')     as string || user;
+    const to       = await this.settingsService.get('notifications.smtp.to')       as string;
+
+    if (!host || !user || !pass || !to) {
+      this.logger.debug('SMTP: configuração incompleta, pulando envio de e-mail');
+      return;
+    }
+
+    const emoji = alert.severity === AlertSeverity.CRITICAL ? '🔴' :
+                  alert.severity === AlertSeverity.WARNING  ? '🟡' : '🟢';
+    const subject = `${emoji} BR10ACS — ${alert.type.replace(/_/g, ' ')} — ${alert.deviceSerial || alert.deviceId}`;
+    const html = `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#1e293b;color:white;padding:20px 24px;border-radius:8px 8px 0 0">
+          <h2 style="margin:0;font-size:18px">BR10ACS — Alerta do Sistema</h2>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-top:none;padding:24px;border-radius:0 0 8px 8px">
+          <p style="font-size:16px;color:#0f172a;margin-top:0">${alert.message}</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px">
+            <tr><td style="padding:6px 0;color:#64748b;width:140px">Severidade</td><td style="color:#0f172a">${alert.severity}</td></tr>
+            <tr><td style="padding:6px 0;color:#64748b">Tipo</td><td style="color:#0f172a">${alert.type}</td></tr>
+            ${alert.deviceSerial ? `<tr><td style="padding:6px 0;color:#64748b">Serial</td><td style="color:#0f172a">${alert.deviceSerial}</td></tr>` : ''}
+            ${alert.deviceModel  ? `<tr><td style="padding:6px 0;color:#64748b">Modelo</td><td style="color:#0f172a">${alert.deviceModel}</td></tr>` : ''}
+            ${alert.pppLogin     ? `<tr><td style="padding:6px 0;color:#64748b">PPPoE</td><td style="color:#0f172a">${alert.pppLogin}</td></tr>` : ''}
+            <tr><td style="padding:6px 0;color:#64748b">Data/Hora</td><td style="color:#0f172a">${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td></tr>
+          </table>
+        </div>
+      </div>`;
+
+    try {
+      const transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
+      await transporter.sendMail({ from, to, subject, html });
+      this.logger.debug(`SMTP: e-mail de alerta enviado para ${to}`);
+    } catch (err: any) {
+      this.logger.warn(`SMTP falhou: ${err?.message}`);
     }
   }
 
