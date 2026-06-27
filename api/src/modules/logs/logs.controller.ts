@@ -24,9 +24,10 @@ export class LogsController {
     @Query('to') to?: string,
     @Query('limit') limit?: number,
     @Query('page') page?: number,
+    @Query('search') search?: string,
   ) {
     return this.logsService.query({
-      deviceId, category, level,
+      deviceId, category, level, search,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
       limit, page,

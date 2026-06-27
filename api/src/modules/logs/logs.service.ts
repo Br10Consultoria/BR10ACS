@@ -38,11 +38,13 @@ export class LogsService {
     to?: Date;
     limit?: number;
     page?: number;
+    search?: string;
   }): Promise<{ data: LogDocument[]; total: number }> {
     const query: any = {};
     if (filters.deviceId) query.deviceId = filters.deviceId;
     if (filters.category) query.category = filters.category;
     if (filters.level) query.level = filters.level;
+    if (filters.search) query.message = { $regex: filters.search, $options: 'i' };
     if (filters.from || filters.to) {
       query.date = {};
       if (filters.from) query.date.$gte = filters.from;

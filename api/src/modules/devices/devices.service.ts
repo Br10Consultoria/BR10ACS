@@ -119,7 +119,9 @@ export class DevicesService {
   }
 
   async factoryReset(deviceId: string): Promise<any> {
-    return this.genieAcsService.factoryReset(deviceId);
+    const result = await this.genieAcsService.factoryReset(deviceId);
+    await this.logsService.warn(`Factory Reset solicitado para ${deviceId}`, LogCategory.DEVICE, { deviceId }, deviceId).catch(() => {});
+    return result;
   }
 
   async connectionRequest(deviceId: string): Promise<void> {
@@ -155,18 +157,24 @@ export class DevicesService {
 
   async setParameters(deviceId: string, params: { name: string; value: any; type: string }[]): Promise<any> {
     const values: [string, any, string][] = params.map((p) => [p.name, p.value, p.type]);
-    return this.genieAcsService.setParameterValues(deviceId, values);
+    const result = await this.genieAcsService.setParameterValues(deviceId, values);
+    const names = params.map((p) => p.name).join(', ');
+    await this.logsService.info(`Parâmetros alterados em ${deviceId}: ${names}`, LogCategory.DEVICE, { deviceId, params }, deviceId).catch(() => {});
+    return result;
   }
 
   async addTag(deviceId: string, tag: string): Promise<void> {
-    return this.genieAcsService.addTag(deviceId, tag);
+    await this.genieAcsService.addTag(deviceId, tag);
+    await this.logsService.info(`Tag adicionada: "${tag}" em ${deviceId}`, LogCategory.DEVICE, { deviceId, tag }, deviceId).catch(() => {});
   }
 
   async removeTag(deviceId: string, tag: string): Promise<void> {
-    return this.genieAcsService.removeTag(deviceId, tag);
+    await this.genieAcsService.removeTag(deviceId, tag);
+    await this.logsService.info(`Tag removida: "${tag}" de ${deviceId}`, LogCategory.DEVICE, { deviceId, tag }, deviceId).catch(() => {});
   }
 
   async delete(deviceId: string): Promise<void> {
+    await this.logsService.warn(`Dispositivo removido: ${deviceId}`, LogCategory.DEVICE, { deviceId }, deviceId).catch(() => {});
     return this.genieAcsService.deleteDevice(deviceId);
   }
 

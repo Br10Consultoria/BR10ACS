@@ -35,12 +35,7 @@ export default function LogsPage() {
     refetchInterval: 15000,
   })
 
-  const allLogs: Record<string, unknown>[] = data?.data || data?.logs || data || []
-  const logs = allLogs.filter((l) =>
-    !search ||
-    String(l.message || '').toLowerCase().includes(search.toLowerCase()) ||
-    String(l.deviceId || '').toLowerCase().includes(search.toLowerCase())
-  )
+  const logs: Record<string, unknown>[] = data?.data || data?.logs || data || []
 
   return (
     <div className="space-y-5">
@@ -77,6 +72,9 @@ export default function LogsPage() {
             <option value="auth">Auth</option>
             <option value="device">Dispositivo</option>
             <option value="cwmp">CWMP</option>
+            <option value="autoconfig">AutoConfig</option>
+            <option value="massop">Op. em Massa</option>
+            <option value="integration">Integração</option>
             <option value="system">Sistema</option>
           </select>
           <button

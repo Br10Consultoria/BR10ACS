@@ -4,6 +4,8 @@ import { Model } from 'mongoose';
 import { GenieAcsService } from '../genieacs/genieacs.service';
 import { DeviceNormalizer } from '../devices/tr069/device-normalizer';
 import { MassOp, MassOpDocument } from './schemas/mass-op.schema';
+import { LogsService } from '../logs/logs.service';
+import { LogCategory } from '../logs/schemas/log.schema';
 
 @Injectable()
 export class MassOpsService {
@@ -12,6 +14,7 @@ export class MassOpsService {
   constructor(
     private genieAcsService: GenieAcsService,
     @InjectModel(MassOp.name) private massOpModel: Model<MassOpDocument>,
+    private logsService: LogsService,
   ) {}
 
   async findAll(limit = 50): Promise<MassOpDocument[]> {
@@ -27,6 +30,7 @@ export class MassOpsService {
   async create(data: Partial<MassOp>, userId: string): Promise<MassOpDocument> {
     const payload: any = { ...data, createdBy: userId, status: 'pending', errorCount: 0, success: 0, processed: 0, total: 0, errorDetails: [] };
     const op = await this.massOpModel.create(payload);
+    await this.logsService.info(`Operação em massa criada: ${data.type}`, LogCategory.MASSOP, { type: data.type, filters: data.filters }, undefined, userId).catch(() => {});
     // Executar de forma assíncrona
     this.execute((op as any)._id.toString()).catch((err: any) =>
       this.logger.error(`Erro na operação em massa ${(op as any)._id}: ${err?.message}`),
@@ -93,11 +97,17 @@ export class MassOpsService {
         $set: { status: 'completed', finishedAt: new Date() },
       });
 
-      this.logger.log(`Operação ${opId} concluída: ${success} sucesso, ${errors} erros`); // errorCount no DB
-    } catch (err) {
+      this.logger.log(`Operação ${opId} concluída: ${success} sucesso, ${errors} erros`);
+      if (errors > 0) {
+        await this.logsService.warn(`Operação em massa ${opId} concluída com ${errors} erros (${success} ok)`, LogCategory.MASSOP, { opId, success, errors }).catch(() => {});
+      } else {
+        await this.logsService.info(`Operação em massa ${opId} concluída: ${success} dispositivos`, LogCategory.MASSOP, { opId, success }).catch(() => {});
+      }
+    } catch (err: any) {
       await this.massOpModel.findByIdAndUpdate(opId, {
         $set: { status: 'failed', finishedAt: new Date() },
       });
+      await this.logsService.error(`Operação em massa ${opId} falhou: ${err?.message || String(err)}`, LogCategory.MASSOP, { opId, error: err?.message }).catch(() => {});
       throw err;
     }
   }

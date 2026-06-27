@@ -5,6 +5,8 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { GenieAcsService } from '../genieacs/genieacs.service';
 import { DeviceNormalizer } from '../devices/tr069/device-normalizer';
 import { AutoConfig, AutoConfigDocument } from './schemas/autoconfig.schema';
+import { LogsService } from '../logs/logs.service';
+import { LogCategory } from '../logs/schemas/log.schema';
 
 @Injectable()
 export class AutoConfigService {
@@ -13,6 +15,7 @@ export class AutoConfigService {
   constructor(
     private genieAcsService: GenieAcsService,
     @InjectModel(AutoConfig.name) private autoConfigModel: Model<AutoConfigDocument>,
+    private logsService: LogsService,
   ) {}
 
   async findAll(): Promise<AutoConfigDocument[]> {
@@ -67,9 +70,11 @@ export class AutoConfigService {
         });
 
         applied.push(config.name);
+        await this.logsService.info(`AutoConfig "${config.name}" aplicado em ${deviceId}`, LogCategory.AUTOCONFIG, { deviceId, rule: config.name }, deviceId).catch(() => {});
       } catch (err: any) {
         this.logger.error(`Erro ao aplicar AutoConfig ${config.name} em ${deviceId}: ${err?.message}`);
         await this.autoConfigModel.findByIdAndUpdate(config._id, { $inc: { 'stats.errors': 1 } });
+        await this.logsService.warn(`AutoConfig "${config.name}" falhou em ${deviceId}: ${err?.message}`, LogCategory.AUTOCONFIG, { deviceId, rule: config.name, error: err?.message }, deviceId).catch(() => {});
         errors.push(`${config.name}: ${err?.message || String(err)}`);
       }
     }
@@ -192,6 +197,9 @@ export class AutoConfigService {
     }
 
     this.logger.log(`AutoConfig periódico concluído: ${applied} aplicações`);
+    if (applied > 0) {
+      await this.logsService.info(`AutoConfig periódico: ${applied} aplicações em ${devices.length} dispositivos`, LogCategory.AUTOCONFIG, { applied, total: devices.length }).catch(() => {});
+    }
   }
 
   private matchesConditions(device: any, conditions: AutoConfig['conditions']): boolean {
