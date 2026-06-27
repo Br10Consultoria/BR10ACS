@@ -17,6 +17,16 @@ export class AutoConfigController {
   @ApiOperation({ summary: 'Listar configurações automáticas' })
   async findAll() { return this.autoConfigService.findAll(); }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Estatísticas globais de autoconfig' })
+  async getStats() { return this.autoConfigService.getStats(); }
+
+  @Get('dry-run/:deviceId')
+  @ApiOperation({ summary: 'Simular quais regras seriam aplicadas a um dispositivo (sem executar)' })
+  async dryRun(@Param('deviceId') deviceId: string) {
+    return this.autoConfigService.dryRun(deviceId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Buscar AutoConfig por ID' })
   async findById(@Param('id') id: string) { return this.autoConfigService.findById(id); }
@@ -36,6 +46,12 @@ export class AutoConfigController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remover AutoConfig' })
   async remove(@Param('id') id: string) { return this.autoConfigService.remove(id); }
+
+  @Post('apply-all')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Forçar execução imediata em todos os dispositivos' })
+  async applyAll() { return this.autoConfigService.applyAll(); }
 
   @Post('apply/:deviceId')
   @Roles(UserRole.OPERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)

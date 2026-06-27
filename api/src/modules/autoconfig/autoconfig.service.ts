@@ -77,6 +77,94 @@ export class AutoConfigService {
     return { applied, errors };
   }
 
+  /** Simula quais regras seriam aplicadas a um dispositivo (sem executar) */
+  async dryRun(deviceId: string): Promise<{
+    deviceId: string;
+    manufacturer: string;
+    model: string;
+    oui: string;
+    matches: { rule: string; id: string; parameters: number; tags: string[] }[];
+    total: number;
+  }> {
+    const device = await this.genieAcsService.getDevice(deviceId);
+    if (!device) throw new NotFoundException(`Dispositivo ${deviceId} não encontrado`);
+    const normalized = DeviceNormalizer.normalize(device);
+    const configs = await this.autoConfigModel.find({ enabled: true }).sort({ priority: -1 }).exec();
+    const matches = configs
+      .filter(c => this.matchesConditions(normalized, c.conditions))
+      .map(c => ({
+        rule: c.name,
+        id: String(c._id),
+        parameters: c.parameters?.length || 0,
+        tags: c.tagsToAdd || [],
+      }));
+    return {
+      deviceId,
+      manufacturer: normalized.manufacturer || '',
+      model: normalized.model || '',
+      oui: normalized.oui || '',
+      matches,
+      total: matches.length,
+    };
+  }
+
+  /** Força execução imediata em todos os dispositivos */
+  async applyAll(): Promise<{ devices: number; applications: number; errors: number }> {
+    const configs = await this.autoConfigModel.find({ enabled: true }).sort({ priority: -1 }).exec();
+    if (!configs.length) return { devices: 0, applications: 0, errors: 0 };
+
+    const devices = await this.genieAcsService.getDevices({}, ['_id', '_lastInform', 'DeviceID']);
+    let applications = 0;
+    let errors = 0;
+
+    for (const device of devices) {
+      const normalized = DeviceNormalizer.normalize(device);
+      for (const config of configs) {
+        if (!this.matchesConditions(normalized, config.conditions)) continue;
+        try {
+          if (config.parameters?.length > 0) {
+            const values: [string, any, string][] = config.parameters.map(p => [p.name, p.value, p.type]);
+            await this.genieAcsService.setParameterValues(device._id, values);
+          }
+          for (const tag of config.tagsToAdd || []) {
+            await this.genieAcsService.addTag(device._id, tag);
+          }
+          await this.autoConfigModel.findByIdAndUpdate(config._id, {
+            $inc: { 'stats.applied': 1 },
+            $set: { 'stats.lastApplied': new Date() },
+          });
+          applications++;
+        } catch {
+          errors++;
+        }
+      }
+    }
+
+    return { devices: devices.length, applications, errors };
+  }
+
+  /** Estatísticas globais de autoconfig */
+  async getStats(): Promise<{
+    totalRules: number;
+    activeRules: number;
+    totalApplied: number;
+    totalErrors: number;
+    lastApplied?: Date;
+  }> {
+    const all = await this.autoConfigModel.find().exec();
+    const totalApplied = all.reduce((s, c) => s + (c.stats?.applied || 0), 0);
+    const totalErrors = all.reduce((s, c) => s + (c.stats?.errors || 0), 0);
+    const dates = all.map(c => c.stats?.lastApplied).filter(Boolean) as Date[];
+    const lastApplied = dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+    return {
+      totalRules: all.length,
+      activeRules: all.filter(c => c.enabled).length,
+      totalApplied,
+      totalErrors,
+      lastApplied,
+    };
+  }
+
   @Cron(CronExpression.EVERY_HOUR)
   async runAutoConfigCron(): Promise<void> {
     this.logger.log('Executando AutoConfig periódico...');

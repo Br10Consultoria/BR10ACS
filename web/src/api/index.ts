@@ -129,11 +129,14 @@ const downloadBlob = async (url: string, filename: string) => {
 // ── AutoConfig ───────────────────────────────────────────────────────────────────
 export const autoconfigApi = {
   list: () => api.get('/autoconfig'),
+  stats: () => api.get('/autoconfig/stats'),
   get: (id: string) => api.get(`/autoconfig/${id}`),
   create: (data: Record<string, unknown>) => api.post('/autoconfig', data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/autoconfig/${id}`, data),
   delete: (id: string) => api.delete(`/autoconfig/${id}`),
   applyToDevice: (deviceId: string) => api.post(`/autoconfig/apply/${deviceId}`),
+  applyAll: () => api.post('/autoconfig/apply-all'),
+  dryRun: (deviceId: string) => api.get(`/autoconfig/dry-run/${deviceId}`),
 }
 
 // ── Integrations / ERP ───────────────────────────────────────────────────────

@@ -1,117 +1,215 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
-  Cpu, Plus, Trash2, ChevronRight, ChevronDown,
-  Zap, RefreshCw, X, Edit2, ToggleLeft, ToggleRight, Settings2,
-  Tag, Code2, AlertTriangle, Info,
+  Plus, RefreshCw, Zap, Settings2, Cpu, Tag, Code2, AlertTriangle,
+  ChevronRight, ChevronDown, Edit2, Trash2, ToggleLeft, ToggleRight,
+  X, Info, Search, Play, FlaskConical, CheckCircle2, XCircle, Loader2,
 } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui'
-import { autoconfigApi } from '@/api'
-import toast from 'react-hot-toast'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui'
+import { autoconfigApi } from '../api'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 interface AutoConfigRule {
   _id: string
   name: string
-  description?: string
   enabled: boolean
   priority: number
   conditions: {
+    oui?: string
     manufacturer?: string
     model?: string
-    oui?: string
-    tags?: string[]
-    serialPattern?: string
     firmwareVersion?: string
+    serialPattern?: string
+    tags?: string[]
   }
   parameters: { name: string; value: string; type: string }[]
-  presets: string[]
   tagsToAdd: string[]
   stats: { applied: number; errors: number; lastApplied?: string }
 }
 
-// ── Constantes ────────────────────────────────────────────────────────────────
+interface GlobalStats {
+  totalRules: number
+  activeRules: number
+  totalApplied: number
+  totalErrors: number
+  lastApplied?: string
+}
+
+interface DryRunResult {
+  deviceId: string
+  manufacturer: string
+  model: string
+  oui: string
+  matches: { rule: string; id: string; parameters: number; tags: string[] }[]
+  total: number
+}
+
+// ── Vendors conhecidos ────────────────────────────────────────────────────────
 
 const KNOWN_VENDORS = [
-  { label: 'INTELBRAS', oui: '00259E' },
-  { label: 'HUAWEI', oui: '6C8D6F' },
-  { label: 'ZTE', oui: 'BC76C7' },
-  { label: 'NOKIA (Alcatel)', oui: '3C1E04' },
-  { label: 'FIBERHOME', oui: 'C8B373' },
-  { label: 'VSOL', oui: 'A8F7E0' },
-  { label: 'TP-LINK', oui: '1C61B4' },
-  { label: 'DATACOM', oui: '001E8C' },
-  { label: 'Personalizado', oui: '' },
+  { oui: 'E8:65:D4', label: 'INTELBRAS', manufacturer: 'INTELBRAS' },
+  { oui: '00:E0:FC', label: 'HUAWEI', manufacturer: 'HUAWEI' },
+  { oui: 'BC:AD:28', label: 'ZTE', manufacturer: 'ZTE' },
+  { oui: '00:13:25', label: 'NOKIA', manufacturer: 'Nokia' },
+  { oui: '00:0A:EB', label: 'TP-LINK', manufacturer: 'TP-LINK' },
+  { oui: '00:1F:A4', label: 'FIBERHOME', manufacturer: 'FiberHome' },
+  { oui: '00:D0:1E', label: 'VSOL', manufacturer: 'VSOL' },
+  { oui: '00:22:B0', label: 'DATACOM', manufacturer: 'DATACOM' },
 ]
 
-const PARAM_TYPES = ['xsd:string', 'xsd:int', 'xsd:boolean', 'xsd:unsignedInt']
+const PARAM_TYPES = ['xsd:string', 'xsd:boolean', 'xsd:int', 'xsd:unsignedInt', 'xsd:dateTime']
 
-// ── Wizard de criação/edição ──────────────────────────────────────────────────
+// ── Modal Dry-Run ─────────────────────────────────────────────────────────────
 
-interface WizardProps {
+function DryRunModal({ onClose }: { onClose: () => void }) {
+  const [deviceId, setDeviceId] = useState('')
+  const [result, setResult] = useState<DryRunResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const run = async () => {
+    if (!deviceId.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      const r = await autoconfigApi.dryRun(deviceId.trim())
+      setResult(r.data as DryRunResult)
+    } catch (e: any) {
+      setError(e?.response?.data?.message || 'Dispositivo não encontrado')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="w-5 h-5 text-purple-600" />
+            <h2 className="text-base font-semibold text-slate-800">Simular Regras (Dry-Run)</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-slate-500">
+            Informe o ID de um dispositivo para simular quais regras ativas seriam aplicadas, sem executar nenhuma ação.
+          </p>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="ID do dispositivo (ex: 000E50-ONT-ABCDEF123456)"
+              value={deviceId}
+              onChange={e => setDeviceId(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && run()}
+              className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+            <button
+              onClick={run}
+              disabled={loading || !deviceId.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-40 transition-colors"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              Simular
+            </button>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg p-3 text-sm text-red-600">
+              <XCircle className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {result && (
+            <div className="space-y-3">
+              <div className="bg-slate-50 rounded-xl p-4 text-sm">
+                <div className="grid grid-cols-3 gap-3 text-xs">
+                  <div><span className="text-slate-400">Fabricante</span><div className="font-medium text-slate-700 mt-0.5">{result.manufacturer || '—'}</div></div>
+                  <div><span className="text-slate-400">Modelo</span><div className="font-medium text-slate-700 mt-0.5">{result.model || '—'}</div></div>
+                  <div><span className="text-slate-400">OUI</span><div className="font-mono text-slate-700 mt-0.5">{result.oui || '—'}</div></div>
+                </div>
+              </div>
+
+              {result.total === 0 ? (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg p-3 text-sm text-amber-700">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  Nenhuma regra ativa corresponde a este dispositivo.
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    <span className="text-sm font-medium text-slate-700">{result.total} regra{result.total !== 1 ? 's' : ''} seriam aplicadas</span>
+                  </div>
+                  <div className="space-y-2">
+                    {result.matches.map((m, i) => (
+                      <div key={i} className="bg-green-50 border border-green-100 rounded-lg px-3 py-2 text-xs">
+                        <div className="font-medium text-green-800">{m.rule}</div>
+                        <div className="text-green-600 mt-0.5">
+                          {m.parameters} parâmetro{m.parameters !== 1 ? 's' : ''}
+                          {m.tags.length > 0 && ` · tags: ${m.tags.join(', ')}`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end px-6 py-4 border-t border-slate-100">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700">Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Wizard de criação/edição ───────────────────────────────────────────────────
+
+function AutoconfigWizard({
+  initial,
+  onClose,
+  onSuccess,
+}: {
   initial?: AutoConfigRule
   onClose: () => void
   onSuccess: () => void
-}
-
-function AutoconfigWizard({ initial, onClose, onSuccess }: WizardProps) {
+}) {
   const isEdit = !!initial
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
   // Step 1 — Identificação
   const [name, setName] = useState(initial?.name || '')
-  const [description, setDescription] = useState(initial?.description || '')
-  const [priority, setPriority] = useState(initial?.priority ?? 100)
+  const [priority, setPriority] = useState(initial?.priority ?? 10)
+  const [enabled, setEnabled] = useState(initial?.enabled ?? true)
 
   // Step 2 — Condições
-  const initVendor = initial?.conditions?.oui
-    ? KNOWN_VENDORS.find(v => v.oui === initial.conditions.oui) ?? KNOWN_VENDORS[KNOWN_VENDORS.length - 1]
-    : null
-  const [selectedVendor, setSelectedVendor] = useState<typeof KNOWN_VENDORS[0] | null>(initVendor)
-  const [customOui, setCustomOui] = useState(initial?.conditions?.oui || '')
+  const [selectedVendor, setSelectedVendor] = useState(
+    KNOWN_VENDORS.find(v => v.oui === initial?.conditions?.oui)?.oui || '__custom__'
+  )
+  const [customOui, setCustomOui] = useState(
+    KNOWN_VENDORS.find(v => v.oui === initial?.conditions?.oui) ? '' : (initial?.conditions?.oui || '')
+  )
   const [model, setModel] = useState(initial?.conditions?.model || '')
-  const [firmware, setFirmware] = useState(initial?.conditions?.firmwareVersion || '')
+  const [firmwareVersion, setFirmwareVersion] = useState(initial?.conditions?.firmwareVersion || '')
   const [serialPattern, setSerialPattern] = useState(initial?.conditions?.serialPattern || '')
 
   // Step 3 — Ações
   const [parameters, setParameters] = useState<{ name: string; value: string; type: string }[]>(
     initial?.parameters || []
   )
+  const [newParam, setNewParam] = useState({ name: '', value: '', type: 'xsd:string' })
   const [tagsToAdd, setTagsToAdd] = useState<string[]>(initial?.tagsToAdd || [])
   const [newTag, setNewTag] = useState('')
-  const [newParam, setNewParam] = useState({ name: '', value: '', type: 'xsd:string' })
-
-  const saveMut = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      isEdit ? autoconfigApi.update(initial!._id, data) : autoconfigApi.create(data),
-    onSuccess: () => {
-      toast.success(isEdit ? 'Regra atualizada' : 'Regra criada com sucesso')
-      onSuccess()
-      onClose()
-    },
-    onError: () => toast.error('Erro ao salvar regra'),
-  })
-
-  const finalOui = selectedVendor?.oui || customOui.trim().toUpperCase()
-
-  const handleSave = () => {
-    saveMut.mutate({
-      name: name.trim(),
-      description: description.trim(),
-      priority,
-      enabled: true,
-      conditions: {
-        oui: finalOui || undefined,
-        model: model.trim() || undefined,
-        firmwareVersion: firmware.trim() || undefined,
-        serialPattern: serialPattern.trim() || undefined,
-      },
-      parameters,
-      tagsToAdd,
-      presets: [],
-    })
-  }
 
   const addParam = () => {
     if (!newParam.name.trim()) return
@@ -119,141 +217,162 @@ function AutoconfigWizard({ initial, onClose, onSuccess }: WizardProps) {
     setNewParam({ name: '', value: '', type: 'xsd:string' })
   }
 
-  const removeParam = (i: number) => setParameters(prev => prev.filter((_, idx) => idx !== i))
+  const saveMut = useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      isEdit ? autoconfigApi.update(initial!._id, data) : autoconfigApi.create(data),
+    onSuccess: () => {
+      toast.success(isEdit ? 'Regra atualizada!' : 'Regra criada!')
+      onSuccess()
+      onClose()
+    },
+    onError: () => toast.error('Erro ao salvar regra'),
+  })
+
+  const handleSave = () => {
+    const oui = selectedVendor === '__custom__' ? customOui.trim() : selectedVendor
+    saveMut.mutate({
+      name: name.trim(),
+      priority,
+      enabled,
+      conditions: {
+        ...(oui && { oui }),
+        ...(model.trim() && { model: model.trim() }),
+        ...(firmwareVersion.trim() && { firmwareVersion: firmwareVersion.trim() }),
+        ...(serialPattern.trim() && { serialPattern: serialPattern.trim() }),
+      },
+      parameters,
+      tagsToAdd,
+    })
+  }
+
+  const STEPS = ['Identificação', 'Condições', 'Ações']
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
-              <Cpu className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-800">{isEdit ? 'Editar Regra' : 'Nova Regra de Autoconfig'}</h3>
-              <p className="text-xs text-slate-400">Passo {step} de 3</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-blue-600" />
+            <h2 className="text-base font-semibold text-slate-800">
+              {isEdit ? 'Editar Regra' : 'Nova Regra de Autoconfig'}
+            </h2>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Progress */}
-        <div className="flex gap-1 px-6 pt-4 flex-shrink-0">
-          {[1, 2, 3].map(s => (
-            <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${s <= step ? 'bg-blue-600' : 'bg-slate-100'}`} />
+        {/* Steps indicator */}
+        <div className="flex items-center px-6 py-3 gap-2 border-b border-slate-50 flex-shrink-0">
+          {STEPS.map((s, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors
+                ${step === i + 1 ? 'bg-blue-600 text-white' : step > i + 1 ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                {step > i + 1 ? '✓' : i + 1}
+              </div>
+              <span className={`text-xs ${step === i + 1 ? 'text-slate-700 font-medium' : 'text-slate-400'}`}>{s}</span>
+              {i < STEPS.length - 1 && <ChevronRight className="w-3 h-3 text-slate-300" />}
+            </div>
           ))}
         </div>
 
-        {/* Conteúdo scrollável */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-
-          {/* Step 1 — Identificação */}
           {step === 1 && (
             <>
               <div>
-                <h4 className="font-medium text-slate-800 mb-1">Identificação da regra</h4>
-                <p className="text-xs text-slate-500">Dê um nome descritivo para identificar esta regra de provisionamento automático.</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Nome da regra *</label>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Nome da Regra *
+                </label>
                 <input
                   type="text"
-                  placeholder="Ex: Intelbras 1200R - Coletar Sinal"
+                  placeholder="Ex: Intelbras 1200R — Coleta de Sinal"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Descrição (opcional)</label>
-                <textarea
-                  placeholder="Descreva o objetivo desta regra..."
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Prioridade</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={1000}
-                  value={priority}
-                  onChange={e => setPriority(Number(e.target.value))}
-                  className="w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs text-slate-400 mt-1">Regras com maior prioridade são aplicadas primeiro. Padrão: 100.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Prioridade</label>
+                  <input
+                    type="number"
+                    min={1} max={100}
+                    value={priority}
+                    onChange={e => setPriority(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Maior número = maior prioridade</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Status</label>
+                  <button
+                    onClick={() => setEnabled(e => !e)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors w-full
+                      ${enabled ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}
+                  >
+                    {enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                    {enabled ? 'Ativa' : 'Inativa'}
+                  </button>
+                </div>
               </div>
             </>
           )}
 
-          {/* Step 2 — Condições */}
           {step === 2 && (
             <>
               <div>
-                <h4 className="font-medium text-slate-800 mb-1">Condições de aplicação</h4>
-                <p className="text-xs text-slate-500">A regra será aplicada automaticamente quando um dispositivo se registrar e atender a estas condições.</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-2">Fabricante (OUI)</label>
-                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Fabricante / OUI</label>
+                <select
+                  value={selectedVendor}
+                  onChange={e => setSelectedVendor(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">— Qualquer fabricante —</option>
                   {KNOWN_VENDORS.map(v => (
-                    <button
-                      key={v.oui + v.label}
-                      onClick={() => { setSelectedVendor(v); if (v.oui) setCustomOui(v.oui) }}
-                      className={`px-2 py-1.5 border rounded-lg text-xs text-left transition-all ${
-                        selectedVendor?.label === v.label
-                          ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      {v.label}
-                    </button>
+                    <option key={v.oui} value={v.oui}>{v.label} ({v.oui})</option>
                   ))}
-                </div>
-                {selectedVendor?.label === 'Personalizado' && (
+                  <option value="__custom__">OUI personalizado...</option>
+                </select>
+                {selectedVendor === '__custom__' && (
                   <input
                     type="text"
-                    placeholder="OUI (ex: 00259E)"
+                    placeholder="Ex: AA:BB:CC"
                     value={customOui}
-                    onChange={e => setCustomOui(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={e => setCustomOui(e.target.value)}
+                    className="mt-2 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 )}
-                {finalOui && (
-                  <p className="text-xs text-slate-400 mt-1">OUI: <span className="font-mono text-blue-600">{finalOui}</span></p>
-                )}
+                <p className="text-xs text-slate-400 mt-1">
+                  Deixe em branco para aplicar a qualquer fabricante.
+                </p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Modelo (opcional)</label>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Modelo</label>
                 <input
                   type="text"
-                  placeholder="Ex: 1200R (deixe vazio para todos os modelos)"
+                  placeholder="Ex: 1200R (parcial aceito)"
                   value={model}
                   onChange={e => setModel(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Versão de firmware (opcional)</label>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Versão de Firmware</label>
                 <input
                   type="text"
-                  placeholder="Ex: 2.2.250203"
-                  value={firmware}
-                  onChange={e => setFirmware(e.target.value)}
+                  placeholder="Ex: 2.2.250203 (parcial aceito)"
+                  value={firmwareVersion}
+                  onChange={e => setFirmwareVersion(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Padrão de serial (regex, opcional)</label>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Padrão de Serial (Regex)</label>
                 <input
                   type="text"
-                  placeholder="Ex: ^ITBS.*"
+                  placeholder="Ex: ^ITBS.* (opcional)"
                   value={serialPattern}
                   onChange={e => setSerialPattern(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -262,60 +381,57 @@ function AutoconfigWizard({ initial, onClose, onSuccess }: WizardProps) {
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2">
                 <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-700">
-                  Deixe todos os campos vazios para aplicar a regra a <strong>todos os dispositivos</strong> que se registrarem.
+                  Todos os campos são opcionais. Quanto mais específico, menor o número de dispositivos afetados.
+                  Campos de texto usam correspondência parcial (contém).
                 </p>
               </div>
             </>
           )}
 
-          {/* Step 3 — Ações */}
           {step === 3 && (
             <>
-              <div>
-                <h4 className="font-medium text-slate-800 mb-1">Ações a executar</h4>
-                <p className="text-xs text-slate-500">Defina o que será feito automaticamente quando o dispositivo atender às condições.</p>
-              </div>
-
               {/* Parâmetros TR-069 */}
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
                   <Code2 className="w-3.5 h-3.5 text-slate-500" />
-                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Parâmetros TR-069 a definir</label>
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Parâmetros TR-069</label>
                 </div>
+
                 {parameters.length > 0 && (
-                  <div className="space-y-1 mb-2">
+                  <div className="space-y-1.5 mb-3">
                     {parameters.map((p, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 text-xs">
-                        <span className="font-mono text-slate-700 flex-1 truncate">{p.name}</span>
-                        <span className="text-slate-400">=</span>
+                      <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-1.5 text-xs border border-slate-100">
+                        <span className="font-mono text-slate-600 flex-1 truncate">{p.name}</span>
+                        <span className="text-slate-300">=</span>
                         <span className="font-mono text-blue-700">{p.value}</span>
-                        <span className="text-slate-300">({p.type.replace('xsd:', '')})</span>
-                        <button onClick={() => removeParam(i)} className="text-slate-300 hover:text-red-500 ml-1">
+                        <span className="text-slate-300 text-xs">({p.type.replace('xsd:', '')})</span>
+                        <button onClick={() => setParameters(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-300 hover:text-red-500 ml-1">
                           <X className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
-                <div className="flex gap-1.5">
+
+                <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-1.5 items-end">
                   <input
                     type="text"
-                    placeholder="Nome do parâmetro TR-069"
+                    placeholder="Nome do parâmetro"
                     value={newParam.name}
                     onChange={e => setNewParam(p => ({ ...p, name: e.target.value }))}
-                    className="flex-1 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                   <input
                     type="text"
                     placeholder="Valor"
                     value={newParam.value}
                     onChange={e => setNewParam(p => ({ ...p, value: e.target.value }))}
-                    className="w-24 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                   <select
                     value={newParam.type}
                     onChange={e => setNewParam(p => ({ ...p, type: e.target.value }))}
-                    className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     {PARAM_TYPES.map(t => <option key={t} value={t}>{t.replace('xsd:', '')}</option>)}
                   </select>
@@ -351,7 +467,12 @@ function AutoconfigWizard({ initial, onClose, onSuccess }: WizardProps) {
                     placeholder="Nome da tag"
                     value={newTag}
                     onChange={e => setNewTag(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && (tagsToAdd.push(newTag.trim()), setTagsToAdd([...tagsToAdd]), setNewTag(''))}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newTag.trim()) {
+                        setTagsToAdd(prev => [...prev, newTag.trim()])
+                        setNewTag('')
+                      }
+                    }}
                     className="flex-1 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                   <button
@@ -368,7 +489,7 @@ function AutoconfigWizard({ initial, onClose, onSuccess }: WizardProps) {
                 <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-700">
-                    Nenhuma ação definida. A regra será criada mas não executará ações. Você pode editar depois para adicionar parâmetros ou tags.
+                    Nenhuma ação definida. A regra será criada mas não executará ações. Você pode editar depois.
                   </p>
                 </div>
               )}
@@ -397,7 +518,7 @@ function AutoconfigWizard({ initial, onClose, onSuccess }: WizardProps) {
               className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-40 transition-colors"
             >
               {saveMut.isPending
-                ? <><RefreshCw className="w-4 h-4 animate-spin" /> Salvando...</>
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
                 : <><Zap className="w-4 h-4" /> {isEdit ? 'Salvar Alterações' : 'Criar Regra'}</>
               }
             </button>
@@ -413,13 +534,22 @@ function AutoconfigWizard({ initial, onClose, onSuccess }: WizardProps) {
 export default function AutoconfigPage() {
   const qc = useQueryClient()
   const [showWizard, setShowWizard] = useState(false)
+  const [showDryRun, setShowDryRun] = useState(false)
   const [editTarget, setEditTarget] = useState<AutoConfigRule | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [applyingAll, setApplyingAll] = useState(false)
 
   const { data: rules = [], isLoading } = useQuery({
     queryKey: ['autoconfig-rules'],
     queryFn: () => autoconfigApi.list().then(r => r.data as AutoConfigRule[]),
     refetchInterval: 30000,
+  })
+
+  const { data: globalStats } = useQuery({
+    queryKey: ['autoconfig-stats'],
+    queryFn: () => autoconfigApi.stats().then(r => r.data as GlobalStats),
+    refetchInterval: 60000,
   })
 
   const toggleMut = useMutation({
@@ -438,8 +568,31 @@ export default function AutoconfigPage() {
     onError: () => toast.error('Erro ao remover regra'),
   })
 
+  const handleApplyAll = async () => {
+    if (!window.confirm('Forçar execução de todas as regras ativas em todos os dispositivos agora?')) return
+    setApplyingAll(true)
+    try {
+      const r = await autoconfigApi.applyAll()
+      const d = r.data as { devices: number; applications: number; errors: number }
+      toast.success(`Concluído: ${d.applications} aplicações em ${d.devices} dispositivos${d.errors > 0 ? ` (${d.errors} erros)` : ''}`)
+      qc.invalidateQueries({ queryKey: ['autoconfig-rules'] })
+      qc.invalidateQueries({ queryKey: ['autoconfig-stats'] })
+    } catch {
+      toast.error('Erro ao executar autoconfig')
+    } finally {
+      setApplyingAll(false)
+    }
+  }
+
   const vendorLabel = (oui?: string) =>
     KNOWN_VENDORS.find(v => v.oui === oui)?.label || oui || '—'
+
+  const filteredRules = rules.filter(r =>
+    !search || r.name.toLowerCase().includes(search.toLowerCase()) ||
+    r.conditions.oui?.toLowerCase().includes(search.toLowerCase()) ||
+    r.conditions.model?.toLowerCase().includes(search.toLowerCase()) ||
+    vendorLabel(r.conditions.oui).toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
     <div className="space-y-6">
@@ -447,24 +600,45 @@ export default function AutoconfigPage() {
         <AutoconfigWizard
           initial={editTarget ?? undefined}
           onClose={() => { setShowWizard(false); setEditTarget(null) }}
-          onSuccess={() => qc.invalidateQueries({ queryKey: ['autoconfig-rules'] })}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['autoconfig-rules'] })
+            qc.invalidateQueries({ queryKey: ['autoconfig-stats'] })
+          }}
         />
       )}
 
+      {showDryRun && <DryRunModal onClose={() => setShowDryRun(false)} />}
+
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-slate-500 max-w-xl">
-            Regras de provisionamento automático. Quando um dispositivo se registrar no ACS e atender às condições
-            definidas, os parâmetros e tags configurados são aplicados automaticamente via TR-069.
+            Regras de provisionamento automático via TR-069. Quando um dispositivo se registrar e atender às condições,
+            os parâmetros e tags configurados são aplicados automaticamente.
           </p>
         </div>
-        <button
-          onClick={() => setShowWizard(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0 ml-4"
-        >
-          <Plus className="w-4 h-4" /> Nova Regra
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setShowDryRun(true)}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <FlaskConical className="w-4 h-4" /> Simular
+          </button>
+          <button
+            onClick={handleApplyAll}
+            disabled={applyingAll || rules.filter(r => r.enabled).length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 border border-amber-200 text-amber-700 bg-amber-50 text-sm rounded-lg hover:bg-amber-100 disabled:opacity-40 transition-colors"
+          >
+            {applyingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            Aplicar Agora
+          </button>
+          <button
+            onClick={() => setShowWizard(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Nova Regra
+          </button>
+        </div>
       </div>
 
       {/* Como funciona */}
@@ -484,34 +658,76 @@ export default function AutoconfigPage() {
         ))}
       </div>
 
+      {/* Estatísticas globais */}
+      {globalStats && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { label: 'Total de Regras', value: globalStats.totalRules, color: 'text-slate-700' },
+            { label: 'Regras Ativas', value: globalStats.activeRules, color: 'text-green-600' },
+            { label: 'Total Aplicações', value: globalStats.totalApplied, color: 'text-blue-600' },
+            { label: 'Erros Registrados', value: globalStats.totalErrors, color: 'text-red-500' },
+            {
+              label: 'Última Execução',
+              value: globalStats.lastApplied
+                ? new Date(globalStats.lastApplied).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                : '—',
+              color: 'text-slate-600',
+              small: true,
+            },
+          ].map((s, i) => (
+            <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+              <div className={`font-bold ${s.small ? 'text-base' : 'text-2xl'} ${s.color}`}>{s.value}</div>
+              <div className="text-xs text-slate-500 mt-1">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Lista de regras */}
       <Card>
-        <CardHeader className="flex items-center justify-between">
+        <CardHeader className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <CardTitle>Regras Configuradas</CardTitle>
             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
               {rules.filter(r => r.enabled).length} ativas
             </span>
           </div>
-          <button
-            onClick={() => qc.invalidateQueries({ queryKey: ['autoconfig-rules'] })}
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar regra..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-48"
+              />
+            </div>
+            <button
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ['autoconfig-rules'] })
+                qc.invalidateQueries({ queryKey: ['autoconfig-stats'] })
+              }}
+              className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="text-center py-10 text-slate-400 text-sm">Carregando...</div>
-          ) : rules.length === 0 ? (
+            <div className="text-center py-10 text-slate-400 text-sm flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
+            </div>
+          ) : filteredRules.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <Cpu className="w-10 h-10 mx-auto mb-2 opacity-20" />
-              <p className="text-sm">Nenhuma regra de autoconfig criada</p>
-              <p className="text-xs mt-1">Clique em "Nova Regra" para configurar o provisionamento automático</p>
+              <p className="text-sm">{search ? 'Nenhuma regra encontrada para esta busca' : 'Nenhuma regra de autoconfig criada'}</p>
+              {!search && <p className="text-xs mt-1">Clique em "Nova Regra" para configurar o provisionamento automático</p>}
             </div>
           ) : (
             <div className="divide-y divide-slate-50">
-              {[...rules].sort((a, b) => b.priority - a.priority).map(rule => (
+              {[...filteredRules].sort((a, b) => b.priority - a.priority).map(rule => (
                 <div key={rule._id}>
                   <div
                     className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
@@ -539,6 +755,11 @@ export default function AutoconfigPage() {
                         {rule.conditions.model && (
                           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
                             {rule.conditions.model}
+                          </span>
+                        )}
+                        {rule.conditions.firmwareVersion && (
+                          <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded font-mono">
+                            fw: {rule.conditions.firmwareVersion}
                           </span>
                         )}
                         {!rule.enabled && (
@@ -592,6 +813,13 @@ export default function AutoconfigPage() {
                         ))}
                       </div>
 
+                      {rule.conditions.serialPattern && (
+                        <div className="mb-3 text-xs">
+                          <span className="text-slate-400 font-medium uppercase tracking-wider">Padrão de Serial: </span>
+                          <code className="font-mono text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-100">{rule.conditions.serialPattern}</code>
+                        </div>
+                      )}
+
                       {rule.parameters.length > 0 && (
                         <div className="mb-3">
                           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
@@ -613,7 +841,7 @@ export default function AutoconfigPage() {
                       {rule.tagsToAdd.length > 0 && (
                         <div>
                           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                            <Tag className="w-3 h-3" /> Tags a adicionar
+                            <Tag className="w-3 h-3" /> Tags
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {rule.tagsToAdd.map((t, i) => (
@@ -626,7 +854,7 @@ export default function AutoconfigPage() {
                       {rule.stats.errors > 0 && (
                         <div className="mt-3 flex items-center gap-1.5 text-xs text-amber-600">
                           <AlertTriangle className="w-3.5 h-3.5" />
-                          {rule.stats.errors} erro{rule.stats.errors !== 1 ? 's' : ''} na última execução
+                          {rule.stats.errors} erro{rule.stats.errors !== 1 ? 's' : ''} registrado{rule.stats.errors !== 1 ? 's' : ''}
                         </div>
                       )}
 
@@ -644,21 +872,6 @@ export default function AutoconfigPage() {
           )}
         </CardContent>
       </Card>
-
-      {rules.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: 'Regras ativas', value: rules.filter(r => r.enabled).length, color: 'text-green-600' },
-            { label: 'Total de aplicações', value: rules.reduce((s, r) => s + r.stats.applied, 0), color: 'text-blue-600' },
-            { label: 'Erros registrados', value: rules.reduce((s, r) => s + r.stats.errors, 0), color: 'text-red-500' },
-          ].map((s, i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-              <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-              <div className="text-xs text-slate-500 mt-1">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
