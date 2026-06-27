@@ -55,4 +55,11 @@ export class DiagnosticsController {
   async history(@Param('id') id: string, @Query('type') type?: any, @Query('limit') limit?: number) {
     return this.diagnosticsService.getHistory(id, type, limit);
   }
+
+  @Post('ai-analysis')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Análise inteligente da ONT com IA (OpenAI GPT-4o-mini)' })
+  async aiAnalysis(@Param('id') id: string, @Request() req) {
+    return this.diagnosticsService.analyzeWithAI(id, req.user.id);
+  }
 }

@@ -3,9 +3,10 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, RefreshCw, Power, RotateCcw, Wifi,
-  Signal, Activity, Monitor, Code, Users, Search, Download, Tag, X, Trash2, History, User
+  Signal, Activity, Monitor, Code, Users, Search, Download, Tag, X, Trash2, History, User,
+  Building2, Phone, Mail, MapPin, ExternalLink, Loader2
 } from 'lucide-react'
-import { devicesApi, logsApi } from '@/api'
+import { devicesApi, logsApi, integrationsApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, Badge, LoadingScreen } from '@/components/ui'
 import { formatDistanceToNow, format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'hosts', label: 'Hosts', icon: Users },
   { id: 'diagnostics', label: 'Diagnóstico', icon: Activity },
   { id: 'history', label: 'Histórico', icon: History },
+  { id: 'erp', label: 'Cliente ERP', icon: Building2 },
   { id: 'raw', label: 'Parâmetros Brutos', icon: Code },
 ]
 
@@ -633,6 +635,9 @@ export default function DeviceDetailPage() {
           </CardContent>
         </Card>
       )}
+      {activeTab === 'erp' && (
+        <ErpTab deviceId={deviceId} pppLogin={(d.pppLogin as string) || ''} serialNumber={(d.serialNumber as string) || ''} />
+      )}
       {activeTab === 'raw' && (
         <Card>
           <CardHeader>
@@ -811,14 +816,40 @@ function ResultBox({ result, type }: { result: DiagResult; type: string }) {
   )
 }
 
+interface AiIssue { title: string; description: string; severity: 'ok' | 'warning' | 'critical' }
+interface AiRecommendation { priority: 'high' | 'medium' | 'low'; action: string; reason: string }
+interface AiResult {
+  summary: string
+  severity: 'ok' | 'warning' | 'critical'
+  issues: AiIssue[]
+  recommendations: AiRecommendation[]
+  predictedCause?: string
+  estimatedImpact?: string
+}
+
 function DiagnosticsTab({ deviceId }: { deviceId: string }) {
   const [pingHost, setPingHost] = useState('8.8.8.8')
   const [traceHost, setTraceHost] = useState('8.8.8.8')
   const [speedUrl, setSpeedUrl] = useState('http://speedtest.tele2.net/1MB.zip')
-
   const ping = useDiagnostic(deviceId, 'ping')
   const traceroute = useDiagnostic(deviceId, 'traceroute')
   const speedtest = useDiagnostic(deviceId, 'speedtest')
+
+  const aiMut = useMutation({
+    mutationFn: () => devicesApi.aiAnalysis(deviceId).then(r => r.data as AiResult),
+    onError: () => toast.error('Erro na análise IA'),
+  })
+
+  const severityColor = (s: string) => {
+    if (s === 'critical') return 'text-red-600 bg-red-50 border-red-200'
+    if (s === 'warning') return 'text-amber-600 bg-amber-50 border-amber-200'
+    return 'text-green-600 bg-green-50 border-green-200'
+  }
+  const priorityColor = (p: string) => {
+    if (p === 'high') return 'bg-red-100 text-red-700'
+    if (p === 'medium') return 'bg-amber-100 text-amber-700'
+    return 'bg-slate-100 text-slate-600'
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -869,14 +900,113 @@ function DiagnosticsTab({ deviceId }: { deviceId: string }) {
               {speedtest.loading ? <RotateCcw className="w-4 h-4 animate-spin" /> : 'Iniciar'}
             </button>
           </div>
-          {speedtest.status && <p className="text-xs text-slate-400 animate-pulse">{speedtest.status}</p>}
+                    {speedtest.status && <p className="text-xs text-slate-400 animate-pulse">{speedtest.status}</p>}
           <ResultBox result={speedtest.result} type="speedtest" />
+        </CardContent>
+      </Card>
+
+      {/* Análise IA */}
+      <Card className="lg:col-span-2 border-2 border-indigo-100">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                <span className="text-white text-sm font-bold">IA</span>
+              </div>
+              <div>
+                <CardTitle>Diagnóstico Inteligente</CardTitle>
+                <p className="text-xs text-slate-500 mt-0.5">Análise automática de sinal, uptime e eventos com IA (GPT-4o-mini)</p>
+              </div>
+            </div>
+            <button
+              onClick={() => aiMut.mutate()}
+              disabled={aiMut.isPending}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {aiMut.isPending ? (
+                <><RotateCcw className="w-4 h-4 animate-spin" /> Analisando...</>
+              ) : (
+                <><span>✦</span> Analisar com IA</>
+              )}
+            </button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!aiMut.data && !aiMut.isPending && (
+            <div className="text-center py-8 text-slate-400">
+              <div className="text-4xl mb-3">✦</div>
+              <p className="text-sm">Clique em "Analisar com IA" para obter um diagnóstico inteligente desta ONT.</p>
+              <p className="text-xs mt-1">A IA analisa sinal óptico, uptime, histórico de eventos e recomenda ações.</p>
+            </div>
+          )}
+          {aiMut.isPending && (
+            <div className="text-center py-8 text-indigo-400">
+              <RotateCcw className="w-8 h-8 animate-spin mx-auto mb-3" />
+              <p className="text-sm">Coletando dados e analisando com IA...</p>
+            </div>
+          )}
+          {aiMut.data && (() => {
+            const r = aiMut.data
+            return (
+              <div className="space-y-4">
+                {/* Sumário */}
+                <div className={`p-4 rounded-lg border ${severityColor(r.severity)}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-sm uppercase tracking-wide">
+                      {r.severity === 'ok' ? '✓ Normal' : r.severity === 'warning' ? '⚠ Atenção' : '✕ Crítico'}
+                    </span>
+                  </div>
+                  <p className="text-sm">{r.summary}</p>
+                  {r.predictedCause && (
+                    <p className="text-xs mt-2 opacity-80"><strong>Causa provável:</strong> {r.predictedCause}</p>
+                  )}
+                  {r.estimatedImpact && (
+                    <p className="text-xs mt-1 opacity-80"><strong>Impacto estimado:</strong> {r.estimatedImpact}</p>
+                  )}
+                </div>
+
+                {/* Problemas */}
+                {r.issues?.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Problemas identificados</h4>
+                    <div className="space-y-2">
+                      {r.issues.map((issue, i) => (
+                        <div key={i} className={`p-3 rounded-lg border ${severityColor(issue.severity)}`}>
+                          <p className="text-sm font-medium">{issue.title}</p>
+                          <p className="text-xs mt-0.5 opacity-80">{issue.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recomendações */}
+                {r.recommendations?.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Recomendações</h4>
+                    <div className="space-y-2">
+                      {r.recommendations.map((rec, i) => (
+                        <div key={i} className="flex gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full h-fit mt-0.5 ${priorityColor(rec.priority)}`}>
+                            {rec.priority === 'high' ? 'Alta' : rec.priority === 'medium' ? 'Média' : 'Baixa'}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">{rec.action}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{rec.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </CardContent>
       </Card>
     </div>
   )
 }
-
 // ── Wi-Fi Tab com edição remota ───────────────────────────────────────────────
 function WifiTab({ deviceId, device }: { deviceId: string; device: Record<string, unknown> }) {
   const qc = useQueryClient()
@@ -1015,6 +1145,265 @@ function WifiTab({ deviceId, device }: { deviceId: string; device: Record<string
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── ErpTab ────────────────────────────────────────────────────────────────────
+
+interface ErpTabProps {
+  deviceId: string
+  pppLogin: string
+  serialNumber: string
+}
+
+interface Integration {
+  _id: string
+  name: string
+  type: string
+  enabled: boolean
+}
+
+interface CustomerResult {
+  found: boolean
+  name?: string
+  cpf?: string
+  status?: string
+  plan?: string
+  address?: string
+  phone?: string
+  email?: string
+  profileUrl?: string
+  rawData?: Record<string, unknown>
+}
+
+function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
+  const [selectedIntegration, setSelectedIntegration] = useState<string>('')
+  const [lookupKey, setLookupKey] = useState<'pppoe' | 'serial'>('pppoe')
+  const [manualValue, setManualValue] = useState('')
+
+  const { data: integrations = [] } = useQuery({
+    queryKey: ['integrations-list'],
+    queryFn: () => integrationsApi.list().then(r => {
+      const list = r.data as Integration[]
+      return list.filter(i => i.enabled)
+    }),
+  })
+
+  const lookupMut = useMutation({
+    mutationFn: ({ integrationId, params }: { integrationId: string; params: Record<string, string> }) =>
+      integrationsApi.lookupCustomer(integrationId, params).then(r => r.data as CustomerResult),
+  })
+
+  const handleLookup = () => {
+    if (!selectedIntegration) { toast.error('Selecione uma integração ERP'); return }
+    const value = manualValue.trim() || (lookupKey === 'pppoe' ? pppLogin : serialNumber)
+    if (!value) { toast.error('Nenhum valor para buscar'); return }
+    const params = lookupKey === 'pppoe' ? { pppoe: value } : { serial: value }
+    lookupMut.mutate({ integrationId: selectedIntegration, params })
+  }
+
+  const customer = lookupMut.data
+
+  const statusColor = (s?: string) => {
+    if (!s) return 'bg-slate-100 text-slate-500'
+    const sl = s.toLowerCase()
+    if (sl.includes('ativo') || sl.includes('active')) return 'bg-green-100 text-green-700'
+    if (sl.includes('suspen') || sl.includes('bloq')) return 'bg-red-100 text-red-700'
+    if (sl.includes('cancel')) return 'bg-slate-100 text-slate-500'
+    return 'bg-yellow-100 text-yellow-700'
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Painel de busca */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-blue-600" />
+            <CardTitle>Consultar Cliente no ERP</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {integrations.length === 0 ? (
+            <div className="text-center py-8 text-slate-400">
+              <Building2 className="w-10 h-10 mx-auto mb-2 opacity-20" />
+              <p className="text-sm">Nenhuma integração ERP configurada</p>
+              <p className="text-xs mt-1">
+                Acesse <strong>Integrações</strong> no menu lateral para configurar seu ERP (SGP, IXC, MK-Auth, etc.)
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Seleção de integração */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Integração ERP</label>
+                <select
+                  value={selectedIntegration}
+                  onChange={e => setSelectedIntegration(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione...</option>
+                  {integrations.map(i => (
+                    <option key={i._id} value={i._id}>{i.name} ({i.type})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tipo de busca */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-2">Buscar por</label>
+                <div className="flex gap-2">
+                  {[
+                    { key: 'pppoe' as const, label: 'Login PPPoE', value: pppLogin },
+                    { key: 'serial' as const, label: 'Serial', value: serialNumber },
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => { setLookupKey(opt.key); setManualValue('') }}
+                      className={`flex-1 px-3 py-2 border rounded-lg text-xs text-left transition-all ${
+                        lookupKey === opt.key
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="font-medium">{opt.label}</div>
+                      <div className="font-mono text-slate-400 truncate">{opt.value || '(não disponível)'}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Valor manual */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Valor de busca (deixe vazio para usar o valor acima)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={lookupKey === 'pppoe' ? pppLogin || 'Login PPPoE...' : serialNumber || 'Serial...'}
+                    value={manualValue}
+                    onChange={e => setManualValue(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleLookup()}
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={handleLookup}
+                    disabled={lookupMut.isPending || !selectedIntegration}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                  >
+                    {lookupMut.isPending
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Search className="w-4 h-4" />
+                    }
+                    Buscar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Resultado da busca */}
+      {lookupMut.isError && (
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <X className="w-5 h-5" />
+              <p className="text-sm">Erro ao consultar o ERP. Verifique a configuração da integração.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {customer && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-slate-600" />
+                <CardTitle>Resultado da Consulta</CardTitle>
+              </div>
+              {customer.found && customer.profileUrl && (
+                <a
+                  href={customer.profileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Ver no ERP
+                </a>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!customer.found ? (
+              <div className="text-center py-8 text-slate-400">
+                <User className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">Nenhum cliente encontrado com este {lookupKey === 'pppoe' ? 'login PPPoE' : 'serial'}</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Nome e status */}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{customer.name || '—'}</h3>
+                    <p className="text-sm text-slate-500 font-mono">{customer.cpf || '—'}</p>
+                  </div>
+                  {customer.status && (
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColor(customer.status)}`}>
+                      {customer.status}
+                    </span>
+                  )}
+                </div>
+
+                {/* Dados do cliente */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {customer.plan && (
+                    <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2.5">
+                      <Signal className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                      <div>
+                        <div className="text-xs text-slate-400">Plano</div>
+                        <div className="text-sm font-medium text-slate-700">{customer.plan}</div>
+                      </div>
+                    </div>
+                  )}
+                  {customer.phone && (
+                    <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2.5">
+                      <Phone className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <div>
+                        <div className="text-xs text-slate-400">Telefone</div>
+                        <div className="text-sm font-medium text-slate-700">{customer.phone}</div>
+                      </div>
+                    </div>
+                  )}
+                  {customer.email && (
+                    <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2.5">
+                      <Mail className="w-4 h-4 text-purple-500 flex-shrink-0" />
+                      <div>
+                        <div className="text-xs text-slate-400">E-mail</div>
+                        <div className="text-sm font-medium text-slate-700">{customer.email}</div>
+                      </div>
+                    </div>
+                  )}
+                  {customer.address && (
+                    <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2.5">
+                      <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <div>
+                        <div className="text-xs text-slate-400">Endereço</div>
+                        <div className="text-sm font-medium text-slate-700">{customer.address}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

@@ -29,6 +29,8 @@ export const devicesApi = {
     api.get(`/devices/${id}/diagnostics/${type}/result`),
   diagnosticsHistory: (id: string, type?: string, limit = 20) =>
     api.get(`/devices/${id}/diagnostics/history`, { params: { type, limit } }),
+  aiAnalysis: (id: string) =>
+    api.post(`/devices/${id}/diagnostics/ai-analysis`),
   stats: () => api.get('/devices/stats'),
   refresh: (id: string) => api.post(`/devices/${id}/refresh`),
   delete: (id: string) => api.delete(`/devices/${id}`),
@@ -122,6 +124,16 @@ const downloadBlob = async (url: string, filename: string) => {
   a.download = filename
   a.click()
   URL.revokeObjectURL(blobUrl)
+}
+
+// ── AutoConfig ───────────────────────────────────────────────────────────────────
+export const autoconfigApi = {
+  list: () => api.get('/autoconfig'),
+  get: (id: string) => api.get(`/autoconfig/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/autoconfig', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/autoconfig/${id}`, data),
+  delete: (id: string) => api.delete(`/autoconfig/${id}`),
+  applyToDevice: (deviceId: string) => api.post(`/autoconfig/apply/${deviceId}`),
 }
 
 // ── Integrations / ERP ───────────────────────────────────────────────────────
