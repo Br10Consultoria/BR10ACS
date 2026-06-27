@@ -590,7 +590,8 @@ export default function DeviceDetailPage() {
             {logsLoading ? (
               <div className="p-8"><LoadingScreen /></div>
             ) : (() => {
-              const logs: Record<string, unknown>[] = (deviceLogs as Record<string, unknown>[]) || []
+              const raw = deviceLogs as { data?: Record<string, unknown>[]; total?: number } | Record<string, unknown>[] | null
+              const logs: Record<string, unknown>[] = Array.isArray(raw) ? raw : (raw as { data?: Record<string, unknown>[] })?.data || []
               if (logs.length === 0) {
                 return (
                   <div className="text-center py-12 text-slate-400">
@@ -600,30 +601,27 @@ export default function DeviceDetailPage() {
                 )
               }
               return (
-                <div className="divide-y divide-slate-50">
+                <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto">
                   {logs.map((log, idx) => {
-                    const action = (log.action as string) || ''
                     const level = (log.level as string) || 'info'
-                    const dotColor = level === 'error' ? 'bg-red-500' : level === 'warn' ? 'bg-yellow-500' : level === 'success' ? 'bg-emerald-500' : 'bg-blue-400'
+                    const dotColor = level === 'error' ? 'bg-red-500' : level === 'warn' ? 'bg-yellow-500' : 'bg-blue-400'
+                    const catColor: Record<string, string> = { auth: 'bg-purple-100 text-purple-700', device: 'bg-blue-100 text-blue-700', cwmp: 'bg-cyan-100 text-cyan-700', autoconfig: 'bg-indigo-100 text-indigo-700', massop: 'bg-orange-100 text-orange-700', system: 'bg-slate-100 text-slate-600' }
+                    const cat = (log.category as string) || 'system'
                     return (
                       <div key={(log._id as string) || idx} className="flex items-start gap-4 px-5 py-3 hover:bg-slate-50 transition-colors">
                         <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${dotColor}`} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-semibold text-slate-700">{action}</span>
-                            {!!log.userName && (
-                              <span className="flex items-center gap-1 text-xs text-slate-500">
-                                <User className="w-3 h-3" />{String(log.userName)}
-                              </span>
-                            )}
+                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${catColor[cat] || catColor.system}`}>{cat}</span>
+                            <span className="text-xs font-medium text-slate-700 truncate">{(log.message as string) || '—'}</span>
                           </div>
-                          {!!log.details && (
-                            <div className="text-xs text-slate-500 mt-0.5 truncate">{String(log.details)}</div>
+                          {!!(log.metadata) && Object.keys(log.metadata as object).length > 0 && (
+                            <pre className="text-xs text-slate-400 mt-1 bg-slate-50 rounded p-1.5 overflow-x-auto">{JSON.stringify(log.metadata, null, 2)}</pre>
                           )}
                         </div>
-                        <div className="text-xs text-slate-400 flex-shrink-0 text-right">
-                          {log.createdAt
-                            ? format(new Date(log.createdAt as string), "dd/MM/yy HH:mm", { locale: ptBR })
+                        <div className="text-xs text-slate-400 flex-shrink-0 text-right whitespace-nowrap">
+                          {log.date
+                            ? format(new Date(log.date as string), 'dd/MM/yy HH:mm', { locale: ptBR })
                             : '—'}
                         </div>
                       </div>
@@ -1199,7 +1197,7 @@ function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
     if (!selectedIntegration) { toast.error('Selecione uma integração ERP'); return }
     const value = manualValue.trim() || (lookupKey === 'pppoe' ? pppLogin : serialNumber)
     if (!value) { toast.error('Nenhum valor para buscar'); return }
-    const params = lookupKey === 'pppoe' ? { pppoe: value } : { serial: value }
+    const params: Record<string, string> = lookupKey === 'pppoe' ? { pppoe: value } : { serial: value }
     lookupMut.mutate({ integrationId: selectedIntegration, params })
   }
 
