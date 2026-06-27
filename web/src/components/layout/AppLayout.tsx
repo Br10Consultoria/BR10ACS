@@ -70,19 +70,26 @@ function ServerMetrics() {
     )
   }
 
-  const cpuPct = data.cpu?.usage ?? 0
-  const memPct = data.memory?.usagePercent ?? 0
-  const uptime = data.uptime?.systemFormatted ?? '—'
+  const cpuPct  = data.cpu?.usage ?? 0
+  const memPct  = data.memory?.usagePercent ?? 0
+  const diskPct = data.disk?.usagePercent ?? 0
+  const diskUsed = data.disk?.usedGB ?? 0
+  const diskTotal = data.disk?.totalGB ?? 0
+  const uptime  = data.uptime?.systemFormatted ?? '—'
 
-  const cpuColor = cpuPct > 80 ? 'red' : cpuPct > 60 ? 'amber' : 'green'
-  const memColor = memPct > 85 ? 'red' : memPct > 70 ? 'amber' : 'green'
+  const cpuColor  = cpuPct  > 80 ? 'red' : cpuPct  > 60 ? 'amber' : 'green'
+  const memColor  = memPct  > 85 ? 'red' : memPct  > 70 ? 'amber' : 'green'
+  const diskColor = diskPct > 85 ? 'red' : diskPct > 70 ? 'amber' : 'green'
+
+  const diskLabel = diskTotal > 0 ? `${diskUsed}/${diskTotal}GB` : `${diskPct}%`
 
   return (
     <div className="flex items-center gap-1.5">
-      <MetricBadge icon={Clock}      label="Hora"    value={timeStr}         color="blue"    />
-      <MetricBadge icon={Cpu}        label="CPU"     value={`${cpuPct}%`}    color={cpuColor} />
-      <MetricBadge icon={MemoryStick} label="RAM"   value={`${memPct}%`}    color={memColor} />
-      <MetricBadge icon={HardDrive}  label="Uptime" value={uptime}           color="slate"   />
+      <MetricBadge icon={Clock}       label="Hora"   value={timeStr}         color="blue"     />
+      <MetricBadge icon={Cpu}         label="CPU"    value={`${cpuPct}%`}    color={cpuColor}  />
+      <MetricBadge icon={MemoryStick} label="RAM"    value={`${memPct}%`}    color={memColor}  />
+      <MetricBadge icon={HardDrive}   label="Disco"  value={diskLabel}       color={diskColor} />
+      <MetricBadge icon={Clock}       label="Uptime" value={uptime}          color="slate"    />
     </div>
   )
 }

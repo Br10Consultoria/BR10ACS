@@ -7,7 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BackupService } from './backup.service';
 import { SettingsService } from '../settings/settings.service';
 
-@Controller('api/v1/backup')
+@Controller('v1/backup')
 @UseGuards(JwtAuthGuard)
 export class BackupController {
   constructor(

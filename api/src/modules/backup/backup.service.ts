@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { InjectModel, InjectConnection } from '@nestjs/mongoose';
+import { Model, Connection } from 'mongoose';
 import { Cron } from '@nestjs/schedule';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -34,10 +34,10 @@ export class BackupService {
 
   constructor(
     @InjectModel(Backup.name) private backupModel: Model<BackupDocument>,
+    @InjectConnection() private readonly connection: Connection,
     private readonly settingsService: SettingsService,
     private readonly logsService: LogsService,
   ) {
-    // Garante que o diretório de backup existe
     if (!fs.existsSync(this.backupDir)) {
       fs.mkdirSync(this.backupDir, { recursive: true });
     }
@@ -45,7 +45,7 @@ export class BackupService {
 
   // ─── Agendamento automático ───────────────────────────────────────────────
 
-  @Cron('0 2 * * *') // Diário às 02:00
+  @Cron('0 2 * * *')
   async scheduledDailyBackup() {
     const enabled = await this.settingsService.get<boolean>('backup.schedule.daily.enabled', false);
     if (!enabled) return;
@@ -53,7 +53,7 @@ export class BackupService {
     await this.runBackup('scheduled-daily');
   }
 
-  @Cron('0 2 * * 0') // Semanal aos domingos às 02:00
+  @Cron('0 2 * * 0')
   async scheduledWeeklyBackup() {
     const enabled = await this.settingsService.get<boolean>('backup.schedule.weekly.enabled', false);
     if (!enabled) return;
@@ -61,7 +61,7 @@ export class BackupService {
     await this.runBackup('scheduled-weekly');
   }
 
-  @Cron('0 2 1 * *') // Mensal no dia 1 às 02:00
+  @Cron('0 2 1 * *')
   async scheduledMonthlyBackup() {
     const enabled = await this.settingsService.get<boolean>('backup.schedule.monthly.enabled', false);
     if (!enabled) return;
@@ -72,15 +72,15 @@ export class BackupService {
   // ─── Backup manual ────────────────────────────────────────────────────────
 
   async runBackup(triggeredBy = 'manual'): Promise<BackupResult> {
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://mongo:27017/br10';
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `br10acs-backup-${ts}.gz`;
+    const filename = `br10acs-backup-${ts}.tar.gz`;
     const filePath = path.join(this.backupDir, filename);
+    const dumpDir = path.join(this.backupDir, `dump-${ts}`);
 
     let record: BackupDocument | null = null;
 
     try {
-      // Cria registro inicial no banco
+      // Cria registro inicial
       record = await this.backupModel.create({
         filename,
         triggeredBy,
@@ -88,26 +88,26 @@ export class BackupService {
         startedAt: new Date(),
       });
 
-      // Executa mongodump e comprime
-      const dumpDir = path.join(this.backupDir, `dump-${ts}`);
-      await execAsync(`mongodump --uri="${mongoUri}" --out="${dumpDir}" --quiet`);
+      // Tenta mongodump primeiro (disponível em alguns ambientes)
+      const mongoUri = process.env.MONGODB_URI || 'mongodb://mongo:27017/br10';
+      const mongodumpAvailable = await this.checkMongodump();
 
-      // Comprime o dump em .tar.gz
-      await execAsync(`tar -czf "${filePath}" -C "${this.backupDir}" "dump-${ts}"`);
-
-      // Remove o diretório temporário
-      await execAsync(`rm -rf "${dumpDir}"`);
+      if (mongodumpAvailable) {
+        await this.runMongodump(mongoUri, dumpDir, filePath);
+      } else {
+        // Fallback: exporta todas as coleções via Mongoose (JSON comprimido)
+        await this.runNativeExport(dumpDir, filePath);
+      }
 
       const stat = fs.statSync(filePath);
       const sizeBytes = stat.size;
 
-      // Atualiza o registro
       await this.backupModel.findByIdAndUpdate(record._id, {
         $set: { status: 'success', completedAt: new Date(), sizeBytes, filePath },
       });
 
       await this.logsService.info(
-        `Backup concluído: ${filename} (${this.formatSize(sizeBytes)})`,
+        `Backup concluído: ${filename} (${this.formatSize(sizeBytes)}) — método: ${mongodumpAvailable ? 'mongodump' : 'nativo'}`,
         LogCategory.SYSTEM,
         { triggeredBy, filename, sizeBytes },
       ).catch(() => {});
@@ -131,7 +131,6 @@ export class BackupService {
         }
       }
 
-      // Limpa backups antigos (mantém últimos N)
       await this.cleanOldBackups();
 
       return {
@@ -159,8 +158,9 @@ export class BackupService {
         { triggeredBy, error: err.message },
       ).catch(() => {});
 
-      // Limpa arquivo parcial se existir
+      // Limpa arquivos temporários
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(dumpDir)) await execAsync(`rm -rf "${dumpDir}"`).catch(() => {});
 
       return {
         id: record ? String(record._id) : 'unknown',
@@ -172,6 +172,72 @@ export class BackupService {
       };
     }
   }
+
+  // ─── Métodos de exportação ────────────────────────────────────────────────
+
+  private async checkMongodump(): Promise<boolean> {
+    try {
+      await execAsync('mongodump --version', { timeout: 3000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async runMongodump(mongoUri: string, dumpDir: string, filePath: string): Promise<void> {
+    await execAsync(`mongodump --uri="${mongoUri}" --out="${dumpDir}" --quiet`, { timeout: 300000 });
+    await execAsync(`tar -czf "${filePath}" -C "${path.dirname(dumpDir)}" "${path.basename(dumpDir)}"`, { timeout: 120000 });
+    await execAsync(`rm -rf "${dumpDir}"`).catch(() => {});
+  }
+
+  private async runNativeExport(dumpDir: string, filePath: string): Promise<void> {
+    // Cria diretório de dump
+    fs.mkdirSync(dumpDir, { recursive: true });
+
+    const db = this.connection.db;
+    if (!db) throw new Error('Conexão com o banco de dados não disponível');
+
+    // Lista todas as coleções
+    const collections = await db.listCollections().toArray();
+    this.logger.log(`Exportando ${collections.length} coleções via método nativo...`);
+
+    const manifest: Record<string, { count: number; exportedAt: string }> = {};
+
+    for (const col of collections) {
+      const colName = col.name;
+      try {
+        const docs = await db.collection(colName).find({}).toArray();
+        const colFile = path.join(dumpDir, `${colName}.json`);
+        fs.writeFileSync(colFile, JSON.stringify(docs, null, 0));
+        manifest[colName] = { count: docs.length, exportedAt: new Date().toISOString() };
+        this.logger.debug(`Exportado: ${colName} (${docs.length} documentos)`);
+      } catch (err: any) {
+        this.logger.warn(`Falha ao exportar coleção ${colName}: ${err.message}`);
+      }
+    }
+
+    // Salva manifesto
+    fs.writeFileSync(
+      path.join(dumpDir, '_manifest.json'),
+      JSON.stringify({
+        exportedAt: new Date().toISOString(),
+        method: 'native-mongoose',
+        collections: manifest,
+        version: '1.0',
+      }, null, 2),
+    );
+
+    // Comprime em .tar.gz
+    await execAsync(
+      `tar -czf "${filePath}" -C "${path.dirname(dumpDir)}" "${path.basename(dumpDir)}"`,
+      { timeout: 120000 },
+    );
+
+    // Remove diretório temporário
+    await execAsync(`rm -rf "${dumpDir}"`).catch(() => {});
+  }
+
+  // ─── Listagem e gerenciamento ─────────────────────────────────────────────
 
   async listBackups(limit = 20): Promise<BackupDocument[]> {
     return this.backupModel
@@ -286,18 +352,13 @@ export class BackupService {
       },
     );
 
-    return {
-      success: true,
-      provider: 'dropbox',
-      url: response.data?.path_display,
-    };
+    return { success: true, provider: 'dropbox', url: response.data?.path_display };
   }
 
   private async uploadToGDrive(
     filePath: string,
     filename: string,
   ): Promise<{ success: boolean; provider: string; url?: string; error?: string }> {
-    // Upload via Google Drive API v3 com service account
     const serviceAccountJson = await this.settingsService.get<string>('backup.cloud.gdrive.serviceAccountJson', '');
     const folderId = await this.settingsService.get<string>('backup.cloud.gdrive.folderId', '');
 
@@ -305,7 +366,6 @@ export class BackupService {
       return { success: false, provider: 'gdrive', error: 'Service Account JSON não configurado' };
     }
 
-    // Obtém token de acesso via JWT do service account
     const sa = JSON.parse(serviceAccountJson);
     const now = Math.floor(Date.now() / 1000);
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
@@ -329,13 +389,8 @@ export class BackupService {
     });
     const accessToken = tokenResponse.data.access_token;
 
-    // Upload multipart
     const fileContent = fs.readFileSync(filePath);
-    const metadata = JSON.stringify({
-      name: filename,
-      parents: folderId ? [folderId] : [],
-    });
-
+    const metadata = JSON.stringify({ name: filename, parents: folderId ? [folderId] : [] });
     const boundary = '-------314159265358979323846';
     const body = Buffer.concat([
       Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: application/gzip\r\n\r\n`),
@@ -381,41 +436,33 @@ export class BackupService {
     const host = `${bucket}.s3.${region}.amazonaws.com`;
     const url = `https://${host}/${key}`;
 
-    // Assinatura AWS Signature V4
     const { createHmac, createHash } = await import('crypto');
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-    const timeStr = now.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+    const timeStr2 = now.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
     const contentHash = createHash('sha256').update(fileContent).digest('hex');
 
     const canonicalRequest = [
-      'PUT',
-      `/${key}`,
-      '',
-      `host:${host}\nx-amz-content-sha256:${contentHash}\nx-amz-date:${timeStr}\n`,
+      'PUT', `/${key}`, '',
+      `host:${host}\nx-amz-content-sha256:${contentHash}\nx-amz-date:${timeStr2}\n`,
       'host;x-amz-content-sha256;x-amz-date',
       contentHash,
     ].join('\n');
 
-    const credentialScope = `${dateStr}/us-east-1/s3/aws4_request`;
+    const credentialScope = `${dateStr}/${region}/s3/aws4_request`;
     const stringToSign = [
-      'AWS4-HMAC-SHA256',
-      timeStr,
-      credentialScope,
+      'AWS4-HMAC-SHA256', timeStr2, credentialScope,
       createHash('sha256').update(canonicalRequest).digest('hex'),
     ].join('\n');
 
-    const hmac = (key: Buffer, data: string) => createHmac('sha256', key).update(data).digest();
-    const signingKey = hmac(
-      hmac(hmac(hmac(Buffer.from(`AWS4${secretAccessKey}`), dateStr), region), 's3'),
-      'aws4_request',
-    );
+    const hmac = (k: Buffer, d: string) => createHmac('sha256', k).update(d).digest();
+    const signingKey = hmac(hmac(hmac(hmac(Buffer.from(`AWS4${secretAccessKey}`), dateStr), region), 's3'), 'aws4_request');
     const signature = createHmac('sha256', signingKey).update(stringToSign).digest('hex');
 
     await axios.put(url, fileContent, {
       headers: {
         Host: host,
-        'x-amz-date': timeStr,
+        'x-amz-date': timeStr2,
         'x-amz-content-sha256': contentHash,
         Authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=${signature}`,
         'Content-Type': 'application/gzip',
@@ -435,12 +482,10 @@ export class BackupService {
     if (!webhookUrl) return { success: false, provider: 'webhook', error: 'URL do webhook não configurada' };
 
     const fileContent = fs.readFileSync(filePath);
-    const base64 = fileContent.toString('base64');
-
     await axios.post(webhookUrl, {
       filename,
       sizeBytes: fileContent.length,
-      data: base64,
+      data: fileContent.toString('base64'),
       timestamp: new Date().toISOString(),
     }, { timeout: 60000 });
 

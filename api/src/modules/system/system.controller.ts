@@ -1,8 +1,9 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import * as os from 'os';
+import { execSync } from 'child_process';
 
-@Controller('api/v1/system')
+@Controller('v1/system')
 @UseGuards(JwtAuthGuard)
 export class SystemController {
   @Get('metrics')
@@ -31,6 +32,25 @@ export class SystemController {
     const processUptimeSec = Math.floor(process.uptime());
     const systemUptimeSec = Math.floor(os.uptime());
 
+    // Informações de disco via df
+    let diskTotal = 0;
+    let diskUsed = 0;
+    let diskFree = 0;
+    let diskUsagePercent = 0;
+    try {
+      // df -k / retorna blocos de 1KB
+      const dfOutput = execSync("df -k / 2>/dev/null | tail -1", { timeout: 3000 }).toString().trim();
+      const parts = dfOutput.split(/\s+/);
+      if (parts.length >= 4) {
+        diskTotal = parseInt(parts[1]) * 1024;   // bytes
+        diskUsed  = parseInt(parts[2]) * 1024;
+        diskFree  = parseInt(parts[3]) * 1024;
+        diskUsagePercent = diskTotal > 0 ? Math.round((diskUsed / diskTotal) * 100) : 0;
+      }
+    } catch {
+      // df não disponível no container — ignora silenciosamente
+    }
+
     return {
       timestamp: new Date().toISOString(),
       cpu: {
@@ -51,6 +71,15 @@ export class SystemController {
         freeMB: Math.round(freeMem / 1024 / 1024),
         usedMB: Math.round(usedMem / 1024 / 1024),
         usagePercent: Math.round((usedMem / totalMem) * 100),
+      },
+      disk: {
+        totalBytes: diskTotal,
+        usedBytes: diskUsed,
+        freeBytes: diskFree,
+        totalGB: Math.round(diskTotal / 1024 / 1024 / 1024 * 10) / 10,
+        usedGB:  Math.round(diskUsed  / 1024 / 1024 / 1024 * 10) / 10,
+        freeGB:  Math.round(diskFree  / 1024 / 1024 / 1024 * 10) / 10,
+        usagePercent: diskUsagePercent,
       },
       uptime: {
         processSec: processUptimeSec,
