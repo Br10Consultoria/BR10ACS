@@ -96,20 +96,7 @@ export default function BackupPage() {
 
   // ── Download ──────────────────────────────────────────────────────────────
   const handleDownload = (id: string, filename: string) => {
-    const token = localStorage.getItem('token')
-    const url = backupApi.downloadUrl(id)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    // Adiciona token como query param para autenticação no download
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.blob())
-      .then(blob => {
-        const blobUrl = URL.createObjectURL(blob)
-        a.href = blobUrl
-        a.click()
-        URL.revokeObjectURL(blobUrl)
-      })
+    backupApi.download(id, filename).catch(() => showToast('error', 'Erro ao baixar backup'))
   }
 
   // ── Stats ─────────────────────────────────────────────────────────────────
@@ -333,13 +320,21 @@ function SchedulePanel({ schedule, onSave, saving }: { schedule: any; onSave: (d
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Diário */}
         <ScheduleBlock title="Diário" enabled={form.daily?.enabled} onToggle={v => set('daily.enabled', v)}>
-          <label className="text-xs text-slate-500">Horário</label>
+          <label className="text-xs text-slate-500">1º Horário</label>
           <input
             type="time"
             value={form.daily?.time || '02:00'}
             onChange={e => set('daily.time', e.target.value)}
             className="mt-1 w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          <label className="text-xs text-slate-500 mt-2 block">2º Horário (opcional)</label>
+          <input
+            type="time"
+            value={form.daily?.time2 || ''}
+            onChange={e => set('daily.time2', e.target.value || null)}
+            className="mt-1 w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-slate-400 mt-1">Deixe vazio para apenas 1 backup/dia</p>
         </ScheduleBlock>
 
         {/* Semanal */}

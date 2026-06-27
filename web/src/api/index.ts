@@ -50,6 +50,7 @@ export const backupApi = {
   run: () => api.post('/backup/run').then(r => r.data),
   list: () => api.get('/backup').then(r => r.data),
   downloadUrl: (id: string) => `${api.defaults.baseURL}/backup/${id}/download`,
+  download: (id: string, filename: string) => downloadBlob(`${String(api.defaults.baseURL)}/backup/${id}/download`, filename),
   delete: (id: string) => api.delete(`/backup/${id}`).then(r => r.data),
   getSchedule: () => api.get('/backup/schedule').then(r => r.data),
   saveSchedule: (data: Record<string, unknown>) => api.post('/backup/schedule', data).then(r => r.data),
@@ -156,7 +157,7 @@ export const aiConfigApi = {
 
 // ── Export ────────────────────────────────────────────────────────────────────────────────────
 const downloadBlob = async (url: string, filename: string) => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('br10_access_token')
   const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   const blob = await r.blob()
   const blobUrl = URL.createObjectURL(blob)
