@@ -609,14 +609,14 @@ export default function DeviceDetailPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-semibold text-slate-700">{action}</span>
-                            {log.userName && (
+                            {!!log.userName && (
                               <span className="flex items-center gap-1 text-xs text-slate-500">
-                                <User className="w-3 h-3" />{log.userName as string}
+                                <User className="w-3 h-3" />{String(log.userName)}
                               </span>
                             )}
                           </div>
-                          {log.details && (
-                            <div className="text-xs text-slate-500 mt-0.5 truncate">{log.details as string}</div>
+                          {!!log.details && (
+                            <div className="text-xs text-slate-500 mt-0.5 truncate">{String(log.details)}</div>
                           )}
                         </div>
                         <div className="text-xs text-slate-400 flex-shrink-0 text-right">

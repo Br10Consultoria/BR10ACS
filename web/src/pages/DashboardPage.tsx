@@ -187,7 +187,7 @@ export default function DashboardPage() {
 
   const { data: stats } = useQuery({
     queryKey: ['device-stats'],
-    queryFn: () => devicesApi.getStats().then(r => r.data),
+    queryFn: () => devicesApi.stats().then((r: { data: unknown }) => r.data),
     refetchInterval: 60000,
   })
 
