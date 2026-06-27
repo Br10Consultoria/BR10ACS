@@ -40,6 +40,21 @@ export const devicesApi = {
     api.get(`/devices/${id}/timeseries`, { params: { from, to, limit } }),
 }
 
+// ── System / Metrics ────────────────────────────────────────────────────────
+export const systemApi = {
+  getMetrics: () => api.get('/system/metrics').then(r => r.data),
+}
+
+// ── Backup ───────────────────────────────────────────────────────────────────
+export const backupApi = {
+  run: () => api.post('/backup/run').then(r => r.data),
+  list: () => api.get('/backup').then(r => r.data),
+  downloadUrl: (id: string) => `${api.defaults.baseURL}/backup/${id}/download`,
+  delete: (id: string) => api.delete(`/backup/${id}`).then(r => r.data),
+  getSchedule: () => api.get('/backup/schedule').then(r => r.data),
+  saveSchedule: (data: Record<string, unknown>) => api.post('/backup/schedule', data).then(r => r.data),
+}
+
 // ── Logs ──────────────────────────────────────────────────────────────────────
 export const logsApi = {
   list: (params?: Record<string, unknown>) =>

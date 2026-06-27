@@ -29,6 +29,8 @@ import { CollectorModule } from './modules/collector/collector.module';
 import { PresetsModule } from './modules/presets/presets.module';
 import { FilesModule } from './modules/files/files.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
+import { SystemModule } from './modules/system/system.module';
+import { BackupModule } from './modules/backup/backup.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -88,6 +90,8 @@ import { HealthController } from './health.controller';
     PresetsModule,
     FilesModule,
     AlertsModule,
+    SystemModule,
+    BackupModule,
   ],
   controllers: [HealthController],
 })

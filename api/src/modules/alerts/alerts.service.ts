@@ -255,14 +255,28 @@ export class AlertsService {
 
     const emoji = alert.severity === AlertSeverity.CRITICAL ? '🔴' :
                   alert.severity === AlertSeverity.WARNING  ? '🟡' : '🟢';
-    const text = `${emoji} *BR10ACS Alert*\n\n${alert.message}\n\n_${new Date().toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}_`;
+    const typeLabel: Record<string, string> = {
+      device_offline: '📴 Dispositivo Offline',
+      device_online: '✅ Dispositivo Online',
+      signal_critical: '⚠️ Sinal Crítico',
+      signal_recovered: '📶 Sinal Recuperado',
+    };
+    const label = typeLabel[alert.type] || alert.type;
+    const ts = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const text = [
+      `${emoji} <b>BR10ACS — ${label}</b>`,
+      ``,
+      alert.message,
+      ``,
+      `<i>${ts}</i>`,
+    ].join('\n');
 
     try {
       await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         chat_id: chatId,
         text,
-        parse_mode: 'Markdown',
-      }, { timeout: 8000 });
+        parse_mode: 'HTML',
+      }, { timeout: 15000 });
       this.logger.debug(`Telegram: alerta '${alert.type}' enviado para chat ${chatId}`);
       await this.logsService.info(
         `Telegram: alerta '${alert.type}' enviado — ${alert.deviceSerial || alert.deviceId}`,

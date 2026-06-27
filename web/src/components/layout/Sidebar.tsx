@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Router, FileText, Settings, Users,
-  LogOut, ChevronRight, Wifi, Activity, Layers, HardDrive, Code2, Bell, Cpu, Link2, Sparkles, BookOpen
+  LogOut, ChevronRight, Wifi, Activity, Layers, HardDrive, Code2, Bell, Cpu, Link2, Sparkles, BookOpen, Database
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
@@ -26,6 +26,7 @@ const genieItems = [
 
 const adminItems = [
   { to: '/integrations', icon: Link2, label: 'Integrações ERP' },
+  { to: '/backup', icon: Database, label: 'Backup' },
   { to: '/docs', icon: BookOpen, label: 'Documentação API' },
   { to: '/settings', icon: Settings, label: 'Configurações' },
   { to: '/users', icon: Users, label: 'Usuários' },

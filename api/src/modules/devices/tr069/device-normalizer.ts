@@ -39,6 +39,13 @@ export interface NormalizedDevice {
   txPower: number | null;
   temperature: number | null;
   voltage: number | null;
+  ponBiasCurrent: number | null;    // mA
+  ponTemperature: number | null;   // °C (transceiver)
+  ponVoltage: number | null;       // mV
+  temperatureSensors: TemperatureSensor[];
+
+  // Portas LAN Ethernet
+  lanPorts: LanPort[];
 
   // Wi-Fi
   wifiNetworks: WifiNetwork[];
@@ -53,6 +60,26 @@ export interface NormalizedDevice {
   periodicInterval: number | null;
   acsUrl: string | null;
   connectionRequestUsername: string | null;
+}
+
+export interface TemperatureSensor {
+  index: number;
+  name: string;
+  value: number;
+  enabled: boolean;
+}
+
+export interface LanPort {
+  index: number;
+  name: string;
+  enabled: boolean;
+  maxBitRate: number | null;  // Mbps
+  duplexMode: string | null;
+  mac: string | null;
+  bytesReceived: number | null;
+  bytesSent: number | null;
+  packetsReceived: number | null;
+  packetsSent: number | null;
 }
 
 export interface WifiNetwork {
@@ -169,6 +196,22 @@ export class DeviceNormalizer {
       txPower: this.extractOptical(device, 'TXPower') || this.extractOptical(device, 'TxPower'),
       temperature: this.extractFromPaths(device, TEMPERATURE_PATHS),
       voltage: this.extractFromPaths(device, VOLTAGE_PATHS),
+      ponBiasCurrent: this.extractNum(device, [
+        'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.BiasCurrent._value',
+        'InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.BiasCurrent._value',
+      ]),
+      ponTemperature: this.extractNum(device, [
+        'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TransceiverTemperature._value',
+        'InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TransceiverTemperature._value',
+      ]),
+      ponVoltage: this.extractNum(device, [
+        'InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.SupplyVoltage._value',
+        'InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.SupplyVoltage._value',
+      ]),
+      temperatureSensors: this.extractTemperatureSensors(device),
+
+      // Portas LAN Ethernet
+      lanPorts: this.extractLanPorts(device),
 
       // Wi-Fi
       wifiNetworks: this.extractWifiNetworks(device),
@@ -430,5 +473,49 @@ export class DeviceNormalizer {
       });
     }
     return hosts;
+  }
+
+  private static extractTemperatureSensors(device: GenieDevice): TemperatureSensor[] {
+    const sensors: TemperatureSensor[] = [];
+    const base = device?.InternetGatewayDevice?.DeviceInfo?.TemperatureStatus?.TemperatureSensor;
+    if (!base) return sensors;
+    for (const idx of Object.keys(base)) {
+      if (isNaN(Number(idx))) continue;
+      const s = base[idx];
+      if (!s) continue;
+      const value = s.Value?._value;
+      if (value == null) continue;
+      sensors.push({
+        index: Number(idx),
+        name: String(s.Name?._value || `Sensor ${idx}`),
+        value: parseFloat(String(value)),
+        enabled: s.Enable?._value === true || s.Enable?._value === 'true' || s.Enable?._value === '1',
+      });
+    }
+    return sensors;
+  }
+
+  private static extractLanPorts(device: GenieDevice): LanPort[] {
+    const ports: LanPort[] = [];
+    const base = device?.InternetGatewayDevice?.LANDevice?.['1']?.LANEthernetInterfaceConfig;
+    if (!base) return ports;
+    for (const idx of Object.keys(base)) {
+      if (isNaN(Number(idx))) continue;
+      const p = base[idx];
+      if (!p) continue;
+      ports.push({
+        index: Number(idx),
+        name: String(p.Name?._value || `LAN${idx}`),
+        enabled: p.Enable?._value === true || p.Enable?._value === 'true' || p.Enable?._value === '1',
+        maxBitRate: p.MaxBitRate?._value != null ? parseFloat(String(p.MaxBitRate._value)) : null,
+        duplexMode: p.DuplexMode?._value ? String(p.DuplexMode._value) : null,
+        mac: p.MACAddress?._value ? String(p.MACAddress._value) : null,
+        bytesReceived: p.Stats?.BytesReceived?._value != null ? parseFloat(String(p.Stats.BytesReceived._value)) : null,
+        bytesSent: p.Stats?.BytesSent?._value != null ? parseFloat(String(p.Stats.BytesSent._value)) : null,
+        packetsReceived: p.Stats?.PacketsReceived?._value != null ? parseFloat(String(p.Stats.PacketsReceived._value)) : null,
+        packetsSent: p.Stats?.PacketsSent?._value != null ? parseFloat(String(p.Stats.PacketsSent._value)) : null,
+      });
+    }
+    return ports;
   }
 }
