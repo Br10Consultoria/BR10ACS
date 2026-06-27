@@ -1,11 +1,11 @@
-import { useState, type ReactElement } from 'react'
+import { useState, useRef, type ReactElement } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Link2, Plus, Trash2, CheckCircle, XCircle, RefreshCw,
   ChevronDown, ChevronRight, ExternalLink, Search,
   Zap, Eye, EyeOff, X, Info, User, Phone, Mail, MapPin,
   Activity, ToggleLeft, ToggleRight, Shield, Key, Globe,
-  Settings2, Save,
+  Settings2, Save, Upload, FileCode, Loader2,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui'
 import { integrationsApi } from '@/api'
@@ -674,6 +674,296 @@ function LookupPanel({ integration }: { integration: Integration }) {
   )
 }
 
+// ── Modal de Importação de Coleção de API ────────────────────────────────────
+
+interface ParsedEndpoint {
+  name: string
+  method: string
+  path: string
+  description: string
+  bodyFields?: string[]
+}
+
+interface ImportCollectionModalProps {
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function ImportCollectionModal({ onClose, onSuccess }: ImportCollectionModalProps) {
+  const [step, setStep] = useState<'upload' | 'preview' | 'configure'>('upload')
+  const [fileContent, setFileContent] = useState('')
+  const [fileName, setFileName] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [parsed, setParsed] = useState<{ endpoints: ParsedEndpoint[]; baseUrl?: string; authType?: string } | null>(null)
+  const [name, setName] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [apiKey, setApiKey] = useState('')
+  const [creating, setCreating] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setFileContent(ev.target?.result as string || '')
+    }
+    reader.readAsText(file)
+  }
+
+  const handleParse = async () => {
+    if (!fileContent.trim()) {
+      toast.error('Cole ou carregue o conteúdo da coleção')
+      return
+    }
+    setParsing(true)
+    try {
+      const res = await integrationsApi.parseApiCollection(fileContent)
+      const data = res.data as { endpoints: ParsedEndpoint[]; baseUrl?: string; authType?: string }
+      setParsed(data)
+      if (data.baseUrl) setBaseUrl(data.baseUrl.replace('HOST', ''))
+      setStep('preview')
+    } catch (err: any) {
+      toast.error('Erro ao analisar coleção: ' + (err?.message || 'desconhecido'))
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  const handleCreate = async () => {
+    if (!baseUrl || !apiKey) {
+      toast.error('Informe a URL base e o token de acesso')
+      return
+    }
+    setCreating(true)
+    try {
+      await integrationsApi.create({
+        name: name || `IXC - ${new Date().toLocaleDateString('pt-BR')}`,
+        type: 'ixc-csnet',
+        enabled: true,
+        config: {
+          baseUrl,
+          apiKey,
+          authType: parsed?.authType || 'basic',
+          importedEndpoints: parsed?.endpoints || [],
+        },
+      })
+      toast.success('Integração criada a partir da coleção!')
+      onSuccess()
+    } catch (err: any) {
+      toast.error('Erro ao criar integração: ' + (err?.response?.data?.message || err?.message))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
+              <FileCode className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-800">Importar Coleção de API</h3>
+              <p className="text-xs text-slate-400">
+                {step === 'upload' ? 'Carregue o arquivo .js da coleção' : step === 'preview' ? 'Endpoints detectados' : 'Configurar credenciais'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Progress */}
+        <div className="flex gap-1 px-6 pt-4 flex-shrink-0">
+          {['upload', 'preview', 'configure'].map((s, i) => (
+            <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${
+              ['upload', 'preview', 'configure'].indexOf(step) >= i ? 'bg-purple-600' : 'bg-slate-100'
+            }`} />
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {/* Step 1: Upload */}
+          {step === 'upload' && (
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2">
+                <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-700">
+                  Suporta coleções no formato Node.js (como as exportadas pelo IXC Soft). O sistema detecta automaticamente
+                  os endpoints, URL base e tipo de autenticação.
+                </p>
+              </div>
+
+              {/* Área de upload de arquivo */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-2">Arquivo da coleção (.js)</label>
+                <div
+                  onClick={() => fileRef.current?.click()}
+                  className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center cursor-pointer hover:border-purple-300 hover:bg-purple-50 transition-colors"
+                >
+                  <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  {fileName ? (
+                    <p className="text-sm font-medium text-purple-700">{fileName}</p>
+                  ) : (
+                    <p className="text-sm text-slate-400">Clique para selecionar o arquivo .js</p>
+                  )}
+                  <p className="text-xs text-slate-300 mt-1">ou cole o conteúdo abaixo</p>
+                </div>
+                <input ref={fileRef} type="file" accept=".js,.txt" className="hidden" onChange={handleFileChange} />
+              </div>
+
+              {/* Textarea para colar o conteúdo */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Ou cole o conteúdo da coleção</label>
+                <textarea
+                  value={fileContent}
+                  onChange={e => setFileContent(e.target.value)}
+                  placeholder="Cole aqui o conteúdo do arquivo .js da coleção de API..."
+                  rows={8}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleParse}
+                  disabled={parsing || !fileContent.trim()}
+                  className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-40 transition-colors"
+                >
+                  {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  Analisar Coleção
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Preview */}
+          {step === 'preview' && parsed && (
+            <div className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="text-xs text-slate-500 mb-0.5">Endpoints detectados</div>
+                  <div className="text-2xl font-bold text-slate-800">{parsed.endpoints.length}</div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="text-xs text-slate-500 mb-0.5">Autenticação</div>
+                  <div className="text-sm font-semibold text-slate-700">
+                    {parsed.authType === 'basic' ? 'Basic Auth' : parsed.authType === 'bearer' ? 'Bearer Token' : parsed.authType || 'Desconhecido'}
+                  </div>
+                </div>
+              </div>
+
+              {parsed.baseUrl && (
+                <div className="bg-green-50 border border-green-100 rounded-xl p-3">
+                  <div className="text-xs text-green-600 font-medium mb-0.5">URL base detectada</div>
+                  <div className="text-sm font-mono text-green-800">{parsed.baseUrl}</div>
+                </div>
+              )}
+
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {parsed.endpoints.map((ep, i) => (
+                  <div key={i} className="flex items-start gap-3 p-2.5 bg-slate-50 rounded-lg">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded flex-shrink-0 mt-0.5 ${
+                      ep.method === 'GET' ? 'bg-blue-100 text-blue-700' :
+                      ep.method === 'POST' ? 'bg-green-100 text-green-700' :
+                      ep.method === 'PUT' ? 'bg-yellow-100 text-yellow-700' :
+                      ep.method === 'DELETE' ? 'bg-red-100 text-red-700' :
+                      'bg-slate-100 text-slate-700'
+                    }`}>{ep.method}</span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-slate-700 truncate">{ep.name}</div>
+                      <div className="text-xs font-mono text-slate-400 truncate">{ep.path}</div>
+                      {ep.bodyFields && ep.bodyFields.length > 0 && (
+                        <div className="text-xs text-slate-400 mt-0.5">Campos: {ep.bodyFields.join(', ')}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between pt-2">
+                <button onClick={() => setStep('upload')} className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700">Voltar</button>
+                <button
+                  onClick={() => setStep('configure')}
+                  className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Configurar Credenciais <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Configure */}
+          {step === 'configure' && (
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Nome da integração</label>
+                <input
+                  type="text"
+                  placeholder="IXC - Produção"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">URL base da API *</label>
+                <input
+                  type="url"
+                  placeholder="https://suaempresa.ixcsoft.com.br"
+                  value={baseUrl}
+                  onChange={e => setBaseUrl(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Substitua HOST pelo endereço do seu servidor IXC</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Token de acesso (userId:token) *</label>
+                <input
+                  type="password"
+                  placeholder="6:4dacdb8e47193e8cbbabe508c3c59b4547e463817b1d9b9a1d20ab4812fe1a62"
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Formato: userId:token — encontrado nas configurações de API do IXC</p>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-2">
+                <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700">
+                  O token é armazenado criptografado. Os {parsed?.endpoints.length || 0} endpoints detectados
+                  serão disponibilizados para consulta de ONTs, usuários RADIUS e dados de fibra.
+                </p>
+              </div>
+
+              <div className="flex justify-between pt-2">
+                <button onClick={() => setStep('preview')} className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700">Voltar</button>
+                <button
+                  onClick={handleCreate}
+                  disabled={creating || !baseUrl || !apiKey}
+                  className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-40 transition-colors"
+                >
+                  {creating
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando...</>
+                    : <><Zap className="w-4 h-4" /> Criar Integração</>
+                  }
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function IntegrationsPage() {
@@ -683,6 +973,7 @@ export default function IntegrationsPage() {
   const [testingId, setTestingId] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string; latencyMs?: number }>>({})
   const [editingActionsFor, setEditingActionsFor] = useState<Integration | null>(null)
+  const [showImportModal, setShowImportModal] = useState(false)
 
   const { data: integrations = [], isLoading } = useQuery({
     queryKey: ['integrations'],
@@ -753,6 +1044,16 @@ export default function IntegrationsPage() {
         />
       )}
 
+      {showImportModal && (
+        <ImportCollectionModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['integrations'] })
+            setShowImportModal(false)
+          }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -761,12 +1062,21 @@ export default function IntegrationsPage() {
             diretamente na tela de detalhes do dispositivo.
           </p>
         </div>
-        <button
-          onClick={() => setShowWizard(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0 ml-4"
-        >
-          <Plus className="w-4 h-4" /> Nova Integração
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm rounded-lg hover:bg-slate-50 transition-colors"
+            title="Importar coleção de API (Node.js/Postman) para configuração automática"
+          >
+            <FileCode className="w-4 h-4" /> Importar Coleção
+          </button>
+          <button
+            onClick={() => setShowWizard(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Nova Integração
+          </button>
+        </div>
       </div>
 
       {/* Stats globais */}

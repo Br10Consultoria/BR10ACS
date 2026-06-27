@@ -57,6 +57,8 @@ export const settingsApi = {
       settings: Object.entries(settings).map(([key, value]) => ({ key, value })),
     }),
   testSmtp: () => api.post<{ ok: boolean; error?: string }>('/settings/test-smtp'),
+  testTelegram: () => api.post<{ ok: boolean; latencyMs?: number; message?: string; error?: string }>('/settings/test-telegram'),
+  testWebhook: () => api.post<{ ok: boolean; statusCode?: number; latencyMs?: number; message?: string; error?: string; responseBody?: unknown }>('/settings/test-webhook'),
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -180,6 +182,19 @@ export const integrationsApi = {
     api.get<Record<string, { label: string; description: string }>>(`/integrations/${id}/actions`),
   executeAction: (id: string, action: string, customerId: string, extra?: Record<string, unknown>) =>
     api.post<{ ok: boolean; statusCode?: number; message: string; data?: unknown }>(`/integrations/${id}/actions/${action}`, { customerId, extra }),
+  // IXC avançado
+  ixcLookupRadUser: (id: string, params: { login?: string; mac?: string; onuMac?: string }) =>
+    api.get(`/integrations/${id}/ixc/rad-user`, { params }),
+  ixcLookupOntFibra: (id: string, params: { mac?: string; onuNumero?: string; idContrato?: string; idLogin?: string }) =>
+    api.get(`/integrations/${id}/ixc/ont-fibra`, { params }),
+  ixcLookupOntComplete: (id: string, params: { login?: string; mac?: string; serial?: string }) =>
+    api.get(`/integrations/${id}/ixc/ont-complete`, { params }),
+  ixcListOntsByContract: (id: string, idContrato: string) =>
+    api.get(`/integrations/${id}/ixc/onts-by-contract`, { params: { idContrato } }),
+  ixcUpdateOntSignal: (id: string, ontId: string, data: Record<string, string>) =>
+    api.put(`/integrations/${id}/ixc/ont-signal/${ontId}`, data),
+  parseApiCollection: (content: string) =>
+    api.post('/integrations/parse-collection', { content }),
 }
 
 export const exportApi = {

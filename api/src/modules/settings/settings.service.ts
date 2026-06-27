@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = [
   { key: 'timeseries.retentionDays', value: 365, description: 'Retenção de TimeSeries em dias' },
   { key: 'auth.sessionExpireHours', value: 24, description: 'Expiração da sessão em horas' },
   { key: 'auth.maxLoginAttempts', value: 5, description: 'Máximo de tentativas de login' },
+  // ── SMTP ──────────────────────────────────────────────────────────────────
   { key: 'notifications.smtp.enabled',  value: false, description: 'Habilitar notificações por e-mail (SMTP)' },
   { key: 'notifications.smtp.host',     value: '', description: 'Servidor SMTP (ex: smtp.gmail.com)' },
   { key: 'notifications.smtp.port',     value: 587, description: 'Porta SMTP (587 para TLS, 465 para SSL, 25 para sem criptografia)' },
@@ -24,12 +25,33 @@ const DEFAULT_SETTINGS = [
   { key: 'notifications.smtp.pass',     value: '', description: 'Senha SMTP ou App Password', isSecret: true },
   { key: 'notifications.smtp.from',     value: '', description: 'Endereço de e-mail remetente (ex: alertas@suaempresa.com)' },
   { key: 'notifications.smtp.to',       value: '', description: 'Destinatário(s) dos alertas (separe múltiplos com vírgula)' },
+  // ── Telegram ──────────────────────────────────────────────────────────────
   { key: 'notifications.telegram.enabled', value: false, description: 'Habilitar notificações via Telegram' },
   { key: 'notifications.telegram.botToken', value: '', description: 'Token do bot do Telegram', isSecret: true },
   { key: 'notifications.telegram.chatId', value: '', description: 'Chat ID do Telegram para receber alertas' },
+  // ── Webhook ───────────────────────────────────────────────────────────────
   { key: 'notifications.webhook.enabled', value: false, description: 'Habilitar webhook genérico para alertas' },
   { key: 'notifications.webhook.url', value: '', description: 'URL do webhook para envio de alertas' },
   { key: 'notifications.webhook.secret', value: '', description: 'Secret header para autenticar o webhook', isSecret: true },
+  // ── Eventos configuráveis por canal ───────────────────────────────────────
+  // Cada chave é um array JSON de tipos de evento que disparam o canal
+  // Valores padrão: todos os eventos críticos/warning disparam todos os canais
+  {
+    key: 'notifications.events.telegram',
+    value: ['device_offline', 'signal_critical'],
+    description: 'Eventos que disparam notificação no Telegram',
+  },
+  {
+    key: 'notifications.events.webhook',
+    value: ['device_offline', 'device_online', 'signal_critical', 'signal_recovered'],
+    description: 'Eventos que disparam notificação no Webhook',
+  },
+  {
+    key: 'notifications.events.email',
+    value: ['device_offline', 'signal_critical'],
+    description: 'Eventos que disparam notificação por e-mail',
+  },
+  // ── OpenAI ────────────────────────────────────────────────────────────────
   { key: 'openai.apiKey', value: '', description: 'Chave de API da OpenAI para diagnóstico IA', isSecret: true },
   { key: 'openai.baseUrl', value: '', description: 'URL base da API OpenAI (deixe vazio para usar o padrão)' },
 ];

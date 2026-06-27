@@ -150,7 +150,7 @@ export class AlertsService {
         // Sinal recuperado
         if (this.criticalSignalDevices.has(id)) {
           this.criticalSignalDevices.delete(id);
-          await this.create({
+          const alert = await this.create({
             deviceId: id,
             deviceSerial: serial,
             deviceModel: model,
@@ -160,24 +160,20 @@ export class AlertsService {
             message: `Sinal recuperado em ${serial || id}: RX ${rxPower.toFixed(2)} dBm${pppLogin ? ` | PPPoE: ${pppLogin}` : ''}`,
             metadata: { rxPower, model, serial, pppLogin },
           });
+          await this.sendNotifications(alert);
         }
       }
     }
   }
 
   /**
-   * Envia notificações para integrações configuradas (Telegram, webhook).
-   * As integrações são buscadas do banco a cada chamada para respeitar mudanças em tempo real.
+   * Envia notificações para os canais configurados, respeitando os eventos habilitados por canal.
    */
   private async sendNotifications(alert: AlertDocument): Promise<void> {
     try {
-      // Telegram
       await this.sendTelegram(alert);
-      // Webhook genérico
       await this.sendWebhook(alert);
-      // E-mail SMTP
       await this.sendEmail(alert);
-      // Marca como notificado
       await this.alertModel.findByIdAndUpdate(alert._id, {
         $set: { notified: true, notifiedAt: new Date() },
       });
@@ -186,14 +182,45 @@ export class AlertsService {
     }
   }
 
+  /**
+   * Verifica se o evento do alerta está habilitado para um canal específico.
+   * Busca a lista de eventos configurados em notifications.events.<canal>
+   */
+  private async isEventEnabledForChannel(alertType: AlertType, channel: 'telegram' | 'webhook' | 'email'): Promise<boolean> {
+    const defaultsByChannel: Record<string, AlertType[]> = {
+      telegram: [AlertType.DEVICE_OFFLINE, AlertType.SIGNAL_CRITICAL],
+      webhook:  [AlertType.DEVICE_OFFLINE, AlertType.DEVICE_ONLINE, AlertType.SIGNAL_CRITICAL, AlertType.SIGNAL_RECOVERED],
+      email:    [AlertType.DEVICE_OFFLINE, AlertType.SIGNAL_CRITICAL],
+    };
+
+    const configured = await this.settingsService.get<AlertType[]>(
+      `notifications.events.${channel}`,
+      defaultsByChannel[channel],
+    );
+
+    // Garante que é array (pode ter sido salvo como string JSON)
+    const list: AlertType[] = Array.isArray(configured)
+      ? configured
+      : (typeof configured === 'string' ? JSON.parse(configured) : defaultsByChannel[channel]);
+
+    return list.includes(alertType);
+  }
+
   private async sendTelegram(alert: AlertDocument): Promise<void> {
-    // Busca configuração do Telegram do banco (Settings) com fallback para env
-    const botToken = await this.settingsService.get('notifications.telegram.botToken') as string || process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = await this.settingsService.get('notifications.telegram.chatId') as string || process.env.TELEGRAM_CHAT_ID;
+    const enabled = await this.settingsService.get<boolean>('notifications.telegram.enabled', false);
+    if (!enabled) return;
+
+    if (!(await this.isEventEnabledForChannel(alert.type, 'telegram'))) {
+      this.logger.debug(`Telegram: evento '${alert.type}' não habilitado para este canal`);
+      return;
+    }
+
+    const botToken = await this.settingsService.get<string>('notifications.telegram.botToken') || process.env.TELEGRAM_BOT_TOKEN;
+    const chatId   = await this.settingsService.get<string>('notifications.telegram.chatId')   || process.env.TELEGRAM_CHAT_ID;
     if (!botToken || !chatId) return;
 
     const emoji = alert.severity === AlertSeverity.CRITICAL ? '🔴' :
-                  alert.severity === AlertSeverity.WARNING ? '🟡' : '🟢';
+                  alert.severity === AlertSeverity.WARNING  ? '🟡' : '🟢';
     const text = `${emoji} *BR10ACS Alert*\n\n${alert.message}\n\n_${new Date().toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}_`;
 
     try {
@@ -202,14 +229,23 @@ export class AlertsService {
         text,
         parse_mode: 'Markdown',
       }, { timeout: 8000 });
-      this.logger.debug(`Telegram: alerta enviado para chat ${chatId}`);
+      this.logger.debug(`Telegram: alerta '${alert.type}' enviado para chat ${chatId}`);
     } catch (err: any) {
       this.logger.warn(`Telegram falhou: ${err?.message}`);
     }
   }
 
   private async sendWebhook(alert: AlertDocument): Promise<void> {
-    const webhookUrl = await this.settingsService.get('notifications.webhook.url') as string || process.env.ALERT_WEBHOOK_URL;
+    const enabled = await this.settingsService.get<boolean>('notifications.webhook.enabled', false);
+    if (!enabled) return;
+
+    if (!(await this.isEventEnabledForChannel(alert.type, 'webhook'))) {
+      this.logger.debug(`Webhook: evento '${alert.type}' não habilitado para este canal`);
+      return;
+    }
+
+    const webhookUrl = await this.settingsService.get<string>('notifications.webhook.url') || process.env.ALERT_WEBHOOK_URL;
+    const secret     = await this.settingsService.get<string>('notifications.webhook.secret');
     if (!webhookUrl) return;
 
     const payload = {
@@ -224,28 +260,33 @@ export class AlertsService {
       timestamp: new Date().toISOString(),
     };
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (secret) headers['X-BR10ACS-Secret'] = secret;
+
     try {
-      await axios.post(webhookUrl, payload, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 8000,
-      });
-      this.logger.debug(`Webhook: alerta enviado para ${webhookUrl}`);
+      await axios.post(webhookUrl, payload, { headers, timeout: 8000 });
+      this.logger.debug(`Webhook: alerta '${alert.type}' enviado para ${webhookUrl}`);
     } catch (err: any) {
       this.logger.warn(`Webhook falhou: ${err?.message}`);
     }
   }
 
   private async sendEmail(alert: AlertDocument): Promise<void> {
-    const enabled = await this.settingsService.get('notifications.smtp.enabled') as boolean;
+    const enabled = await this.settingsService.get<boolean>('notifications.smtp.enabled', false);
     if (!enabled) return;
 
-    const host     = await this.settingsService.get('notifications.smtp.host')     as string;
-    const port     = await this.settingsService.get('notifications.smtp.port')     as number || 587;
-    const secure   = await this.settingsService.get('notifications.smtp.secure')   as boolean || false;
-    const user     = await this.settingsService.get('notifications.smtp.user')     as string;
-    const pass     = await this.settingsService.get('notifications.smtp.pass')     as string;
-    const from     = await this.settingsService.get('notifications.smtp.from')     as string || user;
-    const to       = await this.settingsService.get('notifications.smtp.to')       as string;
+    if (!(await this.isEventEnabledForChannel(alert.type, 'email'))) {
+      this.logger.debug(`E-mail: evento '${alert.type}' não habilitado para este canal`);
+      return;
+    }
+
+    const host   = await this.settingsService.get<string>('notifications.smtp.host');
+    const port   = await this.settingsService.get<number>('notifications.smtp.port', 587);
+    const secure = await this.settingsService.get<boolean>('notifications.smtp.secure', false);
+    const user   = await this.settingsService.get<string>('notifications.smtp.user');
+    const pass   = await this.settingsService.get<string>('notifications.smtp.pass');
+    const from   = await this.settingsService.get<string>('notifications.smtp.from') || user;
+    const to     = await this.settingsService.get<string>('notifications.smtp.to');
 
     if (!host || !user || !pass || !to) {
       this.logger.debug('SMTP: configuração incompleta, pulando envio de e-mail');
@@ -276,7 +317,7 @@ export class AlertsService {
     try {
       const transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
       await transporter.sendMail({ from, to, subject, html });
-      this.logger.debug(`SMTP: e-mail de alerta enviado para ${to}`);
+      this.logger.debug(`SMTP: e-mail de alerta '${alert.type}' enviado para ${to}`);
     } catch (err: any) {
       this.logger.warn(`SMTP falhou: ${err?.message}`);
     }

@@ -1,6 +1,7 @@
 import { Controller, Get, Put, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import * as nodemailer from 'nodemailer';
+import axios from 'axios';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -29,6 +30,8 @@ export class SettingsController {
     await this.settingsService.setBulk(body.settings);
     return { success: true };
   }
+
+  // ── Teste SMTP ────────────────────────────────────────────────────────────
 
   @Post('test-smtp')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -67,6 +70,82 @@ export class SettingsController {
       return { ok: true };
     } catch (err: any) {
       return { ok: false, error: err?.message || 'Erro desconhecido ao enviar e-mail de teste' };
+    }
+  }
+
+  // ── Teste Telegram ────────────────────────────────────────────────────────
+
+  @Post('test-telegram')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Testar configuração do Telegram enviando uma mensagem de teste' })
+  async testTelegram() {
+    const botToken = await this.settingsService.get<string>('notifications.telegram.botToken');
+    const chatId   = await this.settingsService.get<string>('notifications.telegram.chatId');
+
+    if (!botToken || !chatId) {
+      return { ok: false, error: 'Configuração do Telegram incompleta. Preencha o Bot Token e o Chat ID.' };
+    }
+
+    const text = `✅ *BR10ACS — Teste de Conexão*\n\nSua integração com o Telegram está funcionando corretamente!\n\n_Enviado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}_`;
+
+    try {
+      const start = Date.now();
+      const res = await axios.post(
+        `https://api.telegram.org/bot${botToken}/sendMessage`,
+        { chat_id: chatId, text, parse_mode: 'Markdown' },
+        { timeout: 8000 },
+      );
+      const latencyMs = Date.now() - start;
+      if (res.data?.ok) {
+        return { ok: true, latencyMs, message: `Mensagem enviada com sucesso para o chat ${chatId}` };
+      }
+      return { ok: false, error: `Telegram retornou: ${JSON.stringify(res.data)}` };
+    } catch (err: any) {
+      const detail = err?.response?.data?.description || err?.message || 'Erro desconhecido';
+      return { ok: false, error: detail };
+    }
+  }
+
+  // ── Teste Webhook ─────────────────────────────────────────────────────────
+
+  @Post('test-webhook')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Testar configuração do Webhook enviando um payload de teste' })
+  async testWebhook() {
+    const webhookUrl = await this.settingsService.get<string>('notifications.webhook.url');
+    const secret     = await this.settingsService.get<string>('notifications.webhook.secret');
+
+    if (!webhookUrl) {
+      return { ok: false, error: 'URL do webhook não configurada.' };
+    }
+
+    const payload = {
+      event: 'test',
+      severity: 'info',
+      message: 'BR10ACS — Teste de Webhook',
+      timestamp: new Date().toISOString(),
+      source: 'BR10ACS',
+    };
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (secret) headers['X-BR10ACS-Secret'] = secret;
+
+    try {
+      const start = Date.now();
+      const res = await axios.post(webhookUrl, payload, { headers, timeout: 8000, validateStatus: () => true });
+      const latencyMs = Date.now() - start;
+      const ok = res.status >= 200 && res.status < 300;
+      return {
+        ok,
+        statusCode: res.status,
+        latencyMs,
+        message: ok
+          ? `Webhook respondeu com status ${res.status} em ${latencyMs}ms`
+          : `Webhook retornou status ${res.status}`,
+        responseBody: typeof res.data === 'object' ? res.data : String(res.data).slice(0, 200),
+      };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Erro ao conectar ao webhook' };
     }
   }
 }
