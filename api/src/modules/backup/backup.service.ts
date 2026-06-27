@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection } from 'mongoose';
-import { Cron } from '@nestjs/schedule';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { CronJob } from 'cron';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -28,7 +29,7 @@ export interface BackupResult {
 }
 
 @Injectable()
-export class BackupService {
+export class BackupService implements OnModuleInit {
   private readonly logger = new Logger(BackupService.name);
   private readonly backupDir = '/tmp/br10acs-backups';
 
@@ -37,36 +38,84 @@ export class BackupService {
     @InjectConnection() private readonly connection: Connection,
     private readonly settingsService: SettingsService,
     private readonly logsService: LogsService,
+    private readonly schedulerRegistry: SchedulerRegistry,
   ) {
     if (!fs.existsSync(this.backupDir)) {
       fs.mkdirSync(this.backupDir, { recursive: true });
     }
   }
 
-  // ─── Agendamento automático ───────────────────────────────────────────────
+  // ─── Inicialização dos cron jobs dinâmicos ───────────────────────────────────────────────────
 
-  @Cron('0 2 * * *')
-  async scheduledDailyBackup() {
-    const enabled = await this.settingsService.get<boolean>('backup.schedule.daily.enabled', false);
-    if (!enabled) return;
-    this.logger.log('Executando backup diário agendado...');
-    await this.runBackup('scheduled-daily');
+  async onModuleInit() {
+    // Aguarda um momento para que o banco esteja disponível
+    setTimeout(() => this.setupSchedule().catch(e => this.logger.warn(`Erro ao configurar agendamento: ${e.message}`)), 5000);
   }
 
-  @Cron('0 2 * * 0')
-  async scheduledWeeklyBackup() {
-    const enabled = await this.settingsService.get<boolean>('backup.schedule.weekly.enabled', false);
-    if (!enabled) return;
-    this.logger.log('Executando backup semanal agendado...');
-    await this.runBackup('scheduled-weekly');
+  async setupSchedule(): Promise<void> {
+    // Remove jobs existentes para recriar
+    for (const name of ['backup-daily-1', 'backup-daily-2', 'backup-weekly', 'backup-monthly']) {
+      try { this.schedulerRegistry.deleteCronJob(name); } catch { /* não existe */ }
+    }
+
+    const dailyEnabled = await this.settingsService.get<boolean>('backup.schedule.daily.enabled', false);
+    const dailyTime = await this.settingsService.get<string>('backup.schedule.daily.time', '02:00');
+    const dailyTime2 = await this.settingsService.get<string>('backup.schedule.daily.time2', '');
+
+    if (dailyEnabled) {
+      this.addCronJob('backup-daily-1', dailyTime, () => {
+        this.logger.log('Executando backup diário (1º horário)...');
+        this.runBackup('scheduled-daily').catch(e => this.logger.error(`Backup diário falhou: ${e.message}`));
+      });
+
+      if (dailyTime2) {
+        this.addCronJob('backup-daily-2', dailyTime2, () => {
+          this.logger.log('Executando backup diário (2º horário)...');
+          this.runBackup('scheduled-daily-2').catch(e => this.logger.error(`Backup diário-2 falhou: ${e.message}`));
+        });
+      }
+    }
+
+    const weeklyEnabled = await this.settingsService.get<boolean>('backup.schedule.weekly.enabled', false);
+    const weeklyTime = await this.settingsService.get<string>('backup.schedule.weekly.time', '02:00');
+    const weeklyDay = await this.settingsService.get<number>('backup.schedule.weekly.dayOfWeek', 0);
+
+    if (weeklyEnabled) {
+      const [wh, wm] = weeklyTime.split(':').map(Number);
+      const weekCron = `0 ${wm} ${wh} * * ${weeklyDay}`;
+      const weekJob = new CronJob(weekCron, () => {
+        this.logger.log('Executando backup semanal agendado...');
+        this.runBackup('scheduled-weekly').catch(e => this.logger.error(`Backup semanal falhou: ${e.message}`));
+      });
+      this.schedulerRegistry.addCronJob('backup-weekly', weekJob);
+      weekJob.start();
+    }
+
+    const monthlyEnabled = await this.settingsService.get<boolean>('backup.schedule.monthly.enabled', false);
+    const monthlyTime = await this.settingsService.get<string>('backup.schedule.monthly.time', '02:00');
+    const monthlyDay = await this.settingsService.get<number>('backup.schedule.monthly.dayOfMonth', 1);
+
+    if (monthlyEnabled) {
+      const [mh, mm] = monthlyTime.split(':').map(Number);
+      const monthlyCron = `0 ${mm} ${mh} ${monthlyDay} * *`;
+      const monthJob = new CronJob(monthlyCron, () => {
+        this.logger.log('Executando backup mensal agendado...');
+        this.runBackup('scheduled-monthly').catch(e => this.logger.error(`Backup mensal falhou: ${e.message}`));
+      });
+      this.schedulerRegistry.addCronJob('backup-monthly', monthJob);
+      monthJob.start();
+    }
+
+    this.logger.log('Agendamentos de backup configurados');
   }
 
-  @Cron('0 2 1 * *')
-  async scheduledMonthlyBackup() {
-    const enabled = await this.settingsService.get<boolean>('backup.schedule.monthly.enabled', false);
-    if (!enabled) return;
-    this.logger.log('Executando backup mensal agendado...');
-    await this.runBackup('scheduled-monthly');
+  private addCronJob(name: string, timeStr: string, callback: () => void): void {
+    const [h, m] = timeStr.split(':').map(Number);
+    const cronExpr = `0 ${m} ${h} * * *`;
+    const job = new CronJob(cronExpr, callback);
+    this.schedulerRegistry.addCronJob(name, job);
+    job.start();
+    this.logger.log(`Cron job '${name}' registrado: ${cronExpr}`);
   }
 
   // ─── Backup manual ────────────────────────────────────────────────────────
@@ -268,6 +317,7 @@ export class BackupService {
       daily: {
         enabled: await this.settingsService.get<boolean>('backup.schedule.daily.enabled', false),
         time: await this.settingsService.get<string>('backup.schedule.daily.time', '02:00'),
+        time2: await this.settingsService.get<string>('backup.schedule.daily.time2', ''),
       },
       weekly: {
         enabled: await this.settingsService.get<boolean>('backup.schedule.weekly.enabled', false),

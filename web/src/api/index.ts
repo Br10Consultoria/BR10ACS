@@ -147,6 +147,16 @@ export const filesApi = {
     api.delete(`/files/${encodeURIComponent(fileName)}`),
 }
 
+// ── Telegram Bot ────────────────────────────────────────────────────────────────
+export const telegramBotApi = {
+  registerWebhook: (publicUrl: string) =>
+    api.post('/telegram/register-webhook', { publicUrl }).then(r => r.data),
+  deleteWebhook: () =>
+    api.post('/telegram/delete-webhook').then(r => r.data),
+  getWebhookInfo: () =>
+    api.get('/telegram/webhook-info').then(r => r.data),
+}
+
 // ── AI Config ───────────────────────────────────────────────────────────────────
 export const aiConfigApi = {
   status: () => api.get('/ai/status'),

@@ -63,6 +63,8 @@ export class BackupController {
     if (body.daily !== undefined) {
       entries.push({ key: 'backup.schedule.daily.enabled', value: body.daily.enabled });
       if (body.daily.time) entries.push({ key: 'backup.schedule.daily.time', value: body.daily.time });
+      // time2 pode ser null/vazio para desativar o 2º horário
+      if (body.daily.time2 !== undefined) entries.push({ key: 'backup.schedule.daily.time2', value: body.daily.time2 || '' });
     }
     if (body.weekly !== undefined) {
       entries.push({ key: 'backup.schedule.weekly.enabled', value: body.weekly.enabled });
@@ -93,6 +95,9 @@ export class BackupController {
     for (const entry of entries) {
       await this.settingsService.set(entry.key, entry.value);
     }
+
+    // Reconfigura os cron jobs dinâmicos após salvar
+    await this.backupService.setupSchedule().catch(() => {});
 
     return { success: true, saved: entries.length };
   }

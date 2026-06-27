@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Save, RefreshCw, Shield, Database, Mail, Send,
-  MessageSquare, Webhook, CheckCircle, XCircle, Loader2,
+import { Save, RefreshCw, Shield, Database, Mail, Send,
+  MessageSquare, Webhook, CheckCircle, XCircle, Loader2, Bot, Globe, Info,
 } from 'lucide-react'
-import { settingsApi } from '@/api'
+import { settingsApi, telegramBotApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, LoadingScreen } from '@/components/ui'
 import toast from 'react-hot-toast'
 
@@ -143,6 +142,10 @@ export default function SettingsPage() {
   const [testingWebhook, setTestingWebhook] = useState(false)
   const [telegramResult, setTelegramResult] = useState<{ ok: boolean; message?: string; error?: string; latencyMs?: number } | null>(null)
   const [webhookResult, setWebhookResult] = useState<{ ok: boolean; message?: string; error?: string; latencyMs?: number; statusCode?: number } | null>(null)
+  const [registeringWebhook, setRegisteringWebhook] = useState(false)
+  const [webhookRegResult, setWebhookRegResult] = useState<{ ok: boolean; description?: string } | null>(null)
+  const [webhookInfo, setWebhookInfo] = useState<any>(null)
+  const [loadingWebhookInfo, setLoadingWebhookInfo] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -251,6 +254,44 @@ export default function SettingsPage() {
       toast.error(`Erro ao testar Webhook: ${msg}`)
     } finally {
       setTestingWebhook(false)
+    }
+  }
+
+  const registerBotWebhook = async () => {
+    const publicUrl = (values['telegram.bot.publicUrl'] as string || '').trim()
+    if (!publicUrl) {
+      toast.error('Informe a URL pública do sistema antes de registrar o webhook')
+      return
+    }
+    setRegisteringWebhook(true)
+    setWebhookRegResult(null)
+    try {
+      await settingsApi.updateMany(values)
+      const result = await telegramBotApi.registerWebhook(publicUrl)
+      setWebhookRegResult(result)
+      if (result.ok) {
+        toast.success('Webhook do bot registrado com sucesso!')
+      } else {
+        toast.error(`Falha ao registrar webhook: ${result.description || 'erro desconhecido'}`)
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro'
+      setWebhookRegResult({ ok: false, description: msg })
+      toast.error(`Erro: ${msg}`)
+    } finally {
+      setRegisteringWebhook(false)
+    }
+  }
+
+  const loadWebhookInfo = async () => {
+    setLoadingWebhookInfo(true)
+    try {
+      const info = await telegramBotApi.getWebhookInfo()
+      setWebhookInfo(info?.result || info)
+    } catch {
+      setWebhookInfo(null)
+    } finally {
+      setLoadingWebhookInfo(false)
     }
   }
 
@@ -366,6 +407,107 @@ export default function SettingsPage() {
             </button>
             <TestResult result={telegramResult} />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Bot de Autoatendimento ──────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Bot className="w-4 h-4 text-slate-500" />
+            <CardTitle>Bot de Autoatendimento (Telegram)</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            <Info className="w-4 h-4 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium">Como funciona o autoatendimento</p>
+              <p className="text-xs mt-1 text-blue-700">
+                O bot usa o mesmo token configurado acima. O assinante envia uma mensagem para o bot,
+                informa o login PPPoE e pode trocar a senha WiFi. O sistema busca o dispositivo no
+                GenieACS via integração IXC e aplica a alteração via TR-069 automaticamente.
+              </p>
+              <p className="text-xs mt-1 text-blue-700">
+                <strong>Comandos:</strong> /start • /wifi (trocar senha) • /status • /cancelar • /ajuda
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Habilitar Bot de Autoatendimento</label>
+            <button
+              onClick={() => setValue('telegram.bot.enabled', !values['telegram.bot.enabled'])}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                values['telegram.bot.enabled'] ? 'bg-blue-600' : 'bg-slate-200'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                values['telegram.bot.enabled'] ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+            <p className="text-xs text-slate-400 mt-1">Usa o mesmo Bot Token configurado na seção Telegram acima</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">URL Pública do Sistema</label>
+            <input
+              type="url"
+              value={(values['telegram.bot.publicUrl'] as string) || ''}
+              onChange={e => setValue('telegram.bot.publicUrl', e.target.value)}
+              placeholder="https://acs.suaempresa.com.br"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              O Telegram enviará mensagens para:{' '}
+              <code className="bg-slate-100 px-1 rounded text-xs">
+                {(values['telegram.bot.publicUrl'] as string) || 'https://...'}/api/v1/telegram/webhook
+              </code>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              onClick={registerBotWebhook}
+              disabled={registeringWebhook}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {registeringWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+              Registrar Webhook no Telegram
+            </button>
+            <button
+              onClick={loadWebhookInfo}
+              disabled={loadingWebhookInfo}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {loadingWebhookInfo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Info className="w-4 h-4" />}
+              Ver Status do Webhook
+            </button>
+          </div>
+
+          {webhookRegResult && (
+            <div className={`flex items-start gap-2 p-2.5 rounded-lg text-sm ${
+              webhookRegResult.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+            }`}>
+              {webhookRegResult.ok
+                ? <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                : <XCircle className="w-4 h-4 mt-0.5 shrink-0" />}
+              <span>{webhookRegResult.ok ? 'Webhook registrado com sucesso!' : webhookRegResult.description}</span>
+            </div>
+          )}
+
+          {webhookInfo && (
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono space-y-1">
+              <p className="font-semibold text-slate-700 font-sans text-sm mb-2">Status atual do webhook:</p>
+              <p><span className="text-slate-500">URL:</span> {webhookInfo.url || '(não registrado)'}</p>
+              {webhookInfo.pending_update_count !== undefined && (
+                <p><span className="text-slate-500">Mensagens pendentes:</span> {webhookInfo.pending_update_count}</p>
+              )}
+              {webhookInfo.last_error_message && (
+                <p className="text-red-600"><span className="text-slate-500">Último erro:</span> {webhookInfo.last_error_message}</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
