@@ -14,6 +14,7 @@ import MassOpsPage from '@/pages/MassOpsPage'
 import PresetsPage from '@/pages/PresetsPage'
 import FilesPage from '@/pages/FilesPage'
 import AlertsPage from '@/pages/alerts/AlertsPage'
+import AutoconfigPage from '@/pages/AutoconfigPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10000 } },
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="devices/:id" element={<DeviceDetailPage />} />
             <Route path="logs" element={<LogsPage />} />
             <Route path="mass-ops" element={<MassOpsPage />} />
+            <Route path="autoconfig" element={<AutoconfigPage />} />
             <Route path="presets" element={<PresetsPage />} />
             <Route path="provisions" element={<PresetsPage />} />
             <Route path="files" element={<FilesPage />} />
