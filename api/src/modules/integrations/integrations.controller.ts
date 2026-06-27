@@ -91,6 +91,25 @@ export class IntegrationsController {
 
   // ── Webhook (compatibilidade) ──────────────────────────────────────────────────────
 
+  // ── Ações ERP ──────────────────────────────────────────────────────────────────
+
+  @Get(':id/actions')
+  @ApiOperation({ summary: 'Listar ações disponíveis para a integração' })
+  async listActions(@Param('id') id: string) {
+    return this.integrationsService.listActions(id);
+  }
+
+  @Post(':id/actions/:action')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Executar ação no ERP (suspend, reactivate, open_ticket)' })
+  async executeAction(
+    @Param('id') id: string,
+    @Param('action') action: string,
+    @Body() body: { customerId: string; extra?: Record<string, unknown> },
+  ) {
+    return this.integrationsService.executeAction(id, action, body.customerId, body.extra);
+  }
+
   @Post(':id/test-connection')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Testar conexão com o ERP' })

@@ -10,6 +10,13 @@
  *  - lookupParam: qual campo usar para busca (pppoe | serial | cpf)
  */
 
+export interface ErpActionConfig {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;           // suporta {id}, {pppoe}, {serial} como placeholders
+  bodyTemplate?: Record<string, unknown>;
+  successStatus?: number[]; // status HTTP considerados sucesso (default: [200,201,204])
+}
+
 export interface ErpEndpointConfig {
   method: 'GET' | 'POST';
   path: string; // suporta {pppoe}, {serial}, {cpf} como placeholders
@@ -40,6 +47,8 @@ export interface ErpAdapter {
   customerEndpoint: ErpEndpointConfig;
   fieldMap: ErpFieldMap;
   docsUrl?: string;
+  /** Ações executáveis no ERP (chave = nome da ação, ex: 'suspend', 'reactivate', 'open_ticket') */
+  actionEndpoints?: Record<string, ErpActionConfig>;
 }
 
 export const ERP_ADAPTERS: Record<string, ErpAdapter> = {
@@ -67,6 +76,21 @@ export const ERP_ADAPTERS: Record<string, ErpAdapter> = {
       profileUrl: '/admin/clientes/{id}',
     },
     docsUrl: 'https://developers.sgp.net.br',
+    actionEndpoints: {
+      suspend: {
+        method: 'POST',
+        path: '/api/v2/clientes/{id}/suspender',
+      },
+      reactivate: {
+        method: 'POST',
+        path: '/api/v2/clientes/{id}/reativar',
+      },
+      open_ticket: {
+        method: 'POST',
+        path: '/api/v2/os',
+        bodyTemplate: { cliente_id: '{id}', tipo: 'suporte', descricao: 'Chamado aberto via BR10ACS' },
+      },
+    },
   },
 
   ixc: {
@@ -92,6 +116,23 @@ export const ERP_ADAPTERS: Record<string, ErpAdapter> = {
       profileUrl: '/index.php?modulo=clientes&acao=visualizar&id={id}',
     },
     docsUrl: 'https://wiki.ixcsoft.com.br/index.php/API_IXC_Soft',
+    actionEndpoints: {
+      suspend: {
+        method: 'PUT',
+        path: '/webservice/v1/cliente/{id}',
+        bodyTemplate: { ativo: 'N' },
+      },
+      reactivate: {
+        method: 'PUT',
+        path: '/webservice/v1/cliente/{id}',
+        bodyTemplate: { ativo: 'S' },
+      },
+      open_ticket: {
+        method: 'POST',
+        path: '/webservice/v1/su_ticket',
+        bodyTemplate: { id_cliente: '{id}', assunto: 'Suporte técnico', mensagem: 'Chamado aberto via BR10ACS' },
+      },
+    },
   },
 
   mkauth: {

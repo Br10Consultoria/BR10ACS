@@ -1318,6 +1318,7 @@ interface Integration {
 
 interface CustomerResult {
   found: boolean
+  id?: string
   name?: string
   cpf?: string
   status?: string
@@ -1345,6 +1346,27 @@ function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
   const lookupMut = useMutation({
     mutationFn: ({ integrationId, params }: { integrationId: string; params: Record<string, string> }) =>
       integrationsApi.lookupCustomer(integrationId, params).then(r => r.data as CustomerResult),
+  })
+
+  // Ações disponíveis para a integração selecionada
+  const { data: availableActions = {} } = useQuery({
+    queryKey: ['erp-actions', selectedIntegration],
+    queryFn: () =>
+      integrationsApi.listActions(selectedIntegration).then(r => r.data as Record<string, { label: string; description: string }>),
+    enabled: !!selectedIntegration,
+  })
+
+  const actionMut = useMutation({
+    mutationFn: ({ action, customerId }: { action: string; customerId: string }) =>
+      integrationsApi.executeAction(selectedIntegration, action, customerId).then(r => r.data as { ok: boolean; message: string }),
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast.success(result.message || 'Ação executada com sucesso')
+      } else {
+        toast.error(result.message || 'Ação falhou no ERP')
+      }
+    },
+    onError: () => toast.error('Erro ao executar ação no ERP'),
   })
 
   const handleLookup = () => {
@@ -1550,6 +1572,39 @@ function ErpTab({ pppLogin, serialNumber }: ErpTabProps) {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Ações ERP */}
+            {customer?.found && customer.id && Object.keys(availableActions).length > 0 && (
+              <div className="mt-4 border-t pt-4">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Ações no ERP</div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(availableActions).map(([key, info]) => {
+                    const colorMap: Record<string, string> = {
+                      suspend:     'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100',
+                      reactivate:  'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100',
+                      open_ticket: 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100',
+                    }
+                    const cls = colorMap[key] ?? 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          if (!customer.id) return
+                          if (window.confirm(`Confirmar: ${info.label} para ${customer.name ?? customer.id}?`)) {
+                            actionMut.mutate({ action: key, customerId: customer.id })
+                          }
+                        }}
+                        disabled={actionMut.isPending}
+                        title={info.description}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${cls}`}
+                      >
+                        {actionMut.isPending ? '...' : info.label}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}

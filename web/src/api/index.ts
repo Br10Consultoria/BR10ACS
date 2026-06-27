@@ -160,6 +160,10 @@ export const integrationsApi = {
   lookupCustomer: (id: string, params: { pppoe?: string; serial?: string; cpf?: string }) =>
     api.get(`/integrations/${id}/lookup`, { params }),
   toggle: (id: string, enabled: boolean) => api.put(`/integrations/${id}/toggle`, { enabled }),
+  listActions: (id: string) =>
+    api.get<Record<string, { label: string; description: string }>>(`/integrations/${id}/actions`),
+  executeAction: (id: string, action: string, customerId: string, extra?: Record<string, unknown>) =>
+    api.post<{ ok: boolean; statusCode?: number; message: string; data?: unknown }>(`/integrations/${id}/actions/${action}`, { customerId, extra }),
 }
 
 export const exportApi = {

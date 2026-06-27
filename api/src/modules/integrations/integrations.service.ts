@@ -297,6 +297,123 @@ export class IntegrationsService {
     }
   }
 
+  // ── Ações executáveis no ERP ─────────────────────────────────────────────
+
+  /**
+   * Executa uma ação no ERP (ex: suspend, reactivate, open_ticket).
+   * @param integrationId  ID da integração no MongoDB
+   * @param action         Chave da ação (ex: 'suspend')
+   * @param customerId     ID do cliente no ERP (retornado pelo lookupCustomer)
+   * @param extra          Campos extras para mesclar no bodyTemplate
+   */
+  async executeAction(
+    integrationId: string,
+    action: string,
+    customerId: string,
+    extra?: Record<string, unknown>,
+  ): Promise<{ ok: boolean; statusCode?: number; message: string; data?: unknown }> {
+    const integration = await this.findById(integrationId);
+    if (!integration.enabled) {
+      return { ok: false, message: 'Integração desabilitada' };
+    }
+
+    const adapter = ERP_ADAPTERS[integration.type] ?? ERP_ADAPTERS['custom'];
+    const cfg = integration.config || {};
+
+    // Ações podem ser sobrescritas pelo config da integração
+    const configActions = cfg.actionEndpoints as Record<string, unknown> | undefined;
+    const actionCfg =
+      (configActions?.[action] as typeof adapter.actionEndpoints extends undefined ? never : NonNullable<typeof adapter.actionEndpoints>[string]) ||
+      adapter.actionEndpoints?.[action];
+
+    if (!actionCfg) {
+      return { ok: false, message: `Ação '${action}' não configurada para este ERP` };
+    }
+
+    const axiosCfg = this.buildAxiosConfig(integration, adapter);
+
+    // Substituir placeholders no path e no body
+    const replacePlaceholders = (s: string) =>
+      s.replace('{id}', customerId).replace('{customerId}', customerId);
+
+    const path = replacePlaceholders(actionCfg.path);
+
+    let body: Record<string, unknown> | undefined;
+    if (actionCfg.bodyTemplate) {
+      body = Object.fromEntries(
+        Object.entries({ ...actionCfg.bodyTemplate, ...(extra || {}) }).map(([k, v]) => [
+          k,
+          typeof v === 'string' ? replacePlaceholders(v) : v,
+        ]),
+      );
+    } else if (extra) {
+      body = extra;
+    }
+
+    const successStatuses = actionCfg.successStatus ?? [200, 201, 204];
+
+    try {
+      const start = Date.now();
+      const res = await axios.request({
+        ...axiosCfg,
+        method: actionCfg.method,
+        url: path,
+        data: body,
+        validateStatus: () => true,
+      });
+      const latencyMs = Date.now() - start;
+      const ok = successStatuses.includes(res.status);
+
+      await this.integrationModel.findByIdAndUpdate(integrationId, {
+        $inc: { 'stats.requests': 1, ...(ok ? {} : { 'stats.errors': 1 }) },
+        $set: { 'stats.lastUsed': new Date() },
+      });
+
+      if (!ok) {
+        this.logger.warn(`Ação '${action}' retornou ${res.status} para integração ${integration.name}`);
+        return {
+          ok: false,
+          statusCode: res.status,
+          message: `ERP retornou status ${res.status}`,
+          data: res.data,
+        };
+      }
+
+      this.logger.log(`Ação '${action}' executada com sucesso (${latencyMs}ms) — integração ${integration.name}`);
+      return { ok: true, statusCode: res.status, message: 'Ação executada com sucesso', data: res.data };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await this.integrationModel.findByIdAndUpdate(integrationId, { $inc: { 'stats.errors': 1 } });
+      return { ok: false, message: `Erro na requisição: ${msg}` };
+    }
+  }
+
+  /** Lista as ações disponíveis para uma integração */
+  async listActions(
+    integrationId: string,
+  ): Promise<Record<string, { label: string; description: string }>> {
+    const integration = await this.findById(integrationId);
+    const adapter = ERP_ADAPTERS[integration.type] ?? ERP_ADAPTERS['custom'];
+    const cfg = integration.config || {};
+    const configActions = cfg.actionEndpoints as Record<string, unknown> | undefined;
+
+    const actionLabels: Record<string, { label: string; description: string }> = {
+      suspend:     { label: 'Suspender',    description: 'Suspende o contrato do cliente no ERP' },
+      reactivate:  { label: 'Reativar',     description: 'Reativa o contrato do cliente no ERP' },
+      open_ticket: { label: 'Abrir OS',     description: 'Abre uma ordem de serviço no ERP' },
+    };
+
+    const available: Record<string, { label: string; description: string }> = {};
+    const allKeys = new Set([
+      ...Object.keys(adapter.actionEndpoints ?? {}),
+      ...Object.keys(configActions ?? {}),
+    ]);
+    for (const key of allKeys) {
+      available[key] = actionLabels[key] ?? { label: key, description: '' };
+    }
+    return available;
+  }
+
   // ── Webhook (mantido para compatibilidade) ────────────────────────────────
 
   async testWebhook(id: string, payload: unknown): Promise<{ status: number; data: unknown }> {

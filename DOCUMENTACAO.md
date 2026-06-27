@@ -47,7 +47,12 @@ Interface direta para a engine nativa do GenieACS.
 ### 2.5. Integrações ERP (`/integrations`)
 Conecta o BR10ACS aos sistemas de gestão do provedor.
 * **Adaptadores Suportados:** IXC Soft, SGP, MK-Auth, Hubsoft, Leaf, Spify e Custom.
-* **Fluxo:** Quando ativada, a integração permite buscar os dados do cliente (Nome, Plano, Status Financeiro) diretamente no ERP usando o PPPoE, Serial ou CPF da CPE, exibindo as informações na aba "Cliente ERP" do dispositivo.
+* **Fluxo de Consulta (Lookup):** Quando ativada, a integração permite buscar os dados do cliente (Nome, Plano, Status Financeiro) diretamente no ERP usando o PPPoE, Serial ou CPF da CPE.
+* **Fluxo de Ação:** O sistema suporta executar comandos de volta para o ERP. Na aba "Cliente ERP", após localizar o cliente, botões de ação nativos permitem:
+  * **Suspender:** Envia comando de bloqueio/suspensão de contrato.
+  * **Reativar:** Envia comando de desbloqueio/reativação.
+  * **Abrir OS:** Cria um chamado de suporte técnico no ERP vinculado ao cliente.
+* A comunicação é dinâmica, utilizando substituição de placeholders (`{id}`, `{pppoe}`) nos endpoints configurados.
 
 ### 2.6. Diagnósticos & IA (`/diagnostics`)
 Módulo responsável por testes ativos e análise inteligente.
@@ -78,7 +83,7 @@ A tela principal de operação técnica, dividida em abas:
 4. **Hosts:** Lista de dispositivos conectados à LAN/WLAN da CPE.
 5. **Diagnóstico:** Execução de Ping, Traceroute, Speedtest (TR-069) e botão para Análise IA individual.
 6. **Histórico:** Log de eventos específicos daquele dispositivo.
-7. **Cliente ERP:** Dados do assinante buscados em tempo real na integração ativa.
+7. **Cliente ERP:** Dados do assinante buscados em tempo real na integração ativa, com botões nativos para executar ações (Suspender, Reativar, Abrir OS) diretamente no sistema de gestão.
 
 ### Análise IA (Lote)
 * Página dedicada para analisar múltiplas ONTs de uma só vez.
@@ -105,6 +110,14 @@ O GenieACS não armazena histórico. O BR10ACS resolve isso com o serviço `Coll
 3. Esses dados são formatados em um prompt JSON e enviados para a OpenAI.
 4. A IA avalia limites físicos (ex: RX < -27dBm é ruim), quedas de link e alterações recentes.
 5. A resposta retorna em formato estruturado (JSON) e é renderizada na interface com badges de severidade e ações recomendadas.
+
+### Como funciona a Integração ERP (Ações)
+1. Ao acessar a aba **Cliente ERP**, o sistema faz uma requisição `GET` para o endpoint de busca do ERP (ex: `/api/clientes?pppoe=user`).
+2. Se o cliente for encontrado, o backend normaliza a resposta e extrai o `id` interno do cliente no ERP.
+3. A interface exibe os dados e carrega os botões de ação disponíveis para aquele adaptador (ex: IXC ou SGP).
+4. Ao clicar em **Suspender**, o frontend chama `POST /v1/integrations/:id/actions/suspend` passando o `customerId`.
+5. O backend injeta o `customerId` na URL do ERP (ex: `/webservice/v1/cliente/{id}`) e no body da requisição (`{ ativo: 'N' }`), autentica e executa a chamada `PUT/POST`.
+6. O resultado (sucesso ou falha) é registrado nas estatísticas da integração e notificado ao usuário.
 
 ### Como configurar a IA
 1. Acesse o menu lateral **Diagnóstico IA**.
