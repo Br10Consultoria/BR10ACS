@@ -15,6 +15,7 @@ import PresetsPage from '@/pages/PresetsPage'
 import FilesPage from '@/pages/FilesPage'
 import AlertsPage from '@/pages/alerts/AlertsPage'
 import AutoconfigPage from '@/pages/AutoconfigPage'
+import IntegrationsPage from '@/pages/IntegrationsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10000 } },
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="provisions" element={<PresetsPage />} />
             <Route path="files" element={<FilesPage />} />
             <Route path="alerts" element={<AlertsPage />} />
+            <Route path="integrations" element={<IntegrationsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -124,6 +124,20 @@ const downloadBlob = async (url: string, filename: string) => {
   URL.revokeObjectURL(blobUrl)
 }
 
+// ── Integrations / ERP ───────────────────────────────────────────────────────
+export const integrationsApi = {
+  list: () => api.get('/integrations'),
+  get: (id: string) => api.get(`/integrations/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/integrations', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/integrations/${id}`, data),
+  delete: (id: string) => api.delete(`/integrations/${id}`),
+  getAdapters: () => api.get('/integrations/adapters'),
+  getAdapterDefaults: (type: string) => api.get(`/integrations/adapters/${type}`),
+  testConnection: (id: string) => api.post(`/integrations/${id}/test-connection`),
+  lookupCustomer: (id: string, params: { pppoe?: string; serial?: string; cpf?: string }) =>
+    api.get(`/integrations/${id}/lookup`, { params }),
+}
+
 export const exportApi = {
   downloadExcel: (params?: Record<string, string>) => {
     const base = String(api.defaults.baseURL || '')
