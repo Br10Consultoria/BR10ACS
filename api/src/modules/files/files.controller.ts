@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Delete, Param, Query,
+  Controller, Get, Post, Delete, Patch, Param, Query, Body,
   UseGuards, UseInterceptors, UploadedFile,
   HttpCode, HttpStatus, BadRequestException,
 } from '@nestjs/common';
@@ -23,16 +23,33 @@ export class FilesController {
   }
 
   @Post('upload')
-  @ApiOperation({ summary: 'Fazer upload de arquivo para o GenieACS' })
+  @ApiOperation({ summary: 'Fazer upload de arquivo para o GenieACS com metadados' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string; size: number },
     @Query('fileType') fileType = '1 Firmware Upgrade Image',
+    @Query('vendor') vendor?: string,
+    @Query('equipType') equipType?: string,
+    @Query('model') model?: string,
+    @Query('version') version?: string,
   ) {
     if (!file) throw new BadRequestException('Arquivo não enviado');
-    await this.filesService.uploadFile(file.originalname, fileType, file.buffer, file.mimetype);
+    await this.filesService.uploadFile(
+      file.originalname, fileType, file.buffer, file.mimetype,
+      { vendor, equipType, model, version },
+    );
     return { message: 'Arquivo enviado com sucesso', fileName: file.originalname, fileType };
+  }
+
+  @Patch(':fileName')
+  @ApiOperation({ summary: 'Atualizar metadados de um arquivo (vendor, equipType, model, version)' })
+  async updateFileMeta(
+    @Param('fileName') fileName: string,
+    @Body() body: { vendor?: string; equipType?: string; model?: string; version?: string; fileType?: string },
+  ) {
+    await this.filesService.updateFileMeta(fileName, body);
+    return { message: 'Metadados atualizados' };
   }
 
   @Delete(':fileName')

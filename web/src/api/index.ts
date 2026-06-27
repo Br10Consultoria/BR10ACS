@@ -103,13 +103,28 @@ export const alertsApi = {
   acknowledgeAll: (deviceId?: string) => api.post('/alerts/acknowledge-all', { deviceId }),
 }
 
-// ── Files ─────────────────────────────────────────────────────────────────────
+// ── Files ─────────────────────────────────────────────────────────────────────────────────
+export interface FileUploadMeta {
+  vendor?: string
+  equipType?: string
+  model?: string
+  version?: string
+}
+
 export const filesApi = {
   listFiles: () => api.get('/files'),
-  uploadFile: (formData: FormData, fileType: string) =>
-    api.post(`/files/upload?fileType=${encodeURIComponent(fileType)}`, formData, {
+  uploadFile: (formData: FormData, fileType: string, meta?: FileUploadMeta) => {
+    const params = new URLSearchParams({ fileType })
+    if (meta?.vendor)    params.set('vendor',    meta.vendor)
+    if (meta?.equipType) params.set('equipType', meta.equipType)
+    if (meta?.model)     params.set('model',     meta.model)
+    if (meta?.version)   params.set('version',   meta.version)
+    return api.post(`/files/upload?${params.toString()}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+    })
+  },
+  updateFileMeta: (fileName: string, meta: FileUploadMeta & { fileType?: string }) =>
+    api.patch(`/files/${encodeURIComponent(fileName)}`, meta),
   deleteFile: (fileName: string) =>
     api.delete(`/files/${encodeURIComponent(fileName)}`),
 }

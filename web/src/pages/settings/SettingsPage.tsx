@@ -89,7 +89,17 @@ export default function SettingsPage() {
   })
 
   useEffect(() => {
-    if (data) setValues(data)
+    if (!data) return
+    // getAll() retorna array [{key, value}] — converter para objeto { key: value }
+    if (Array.isArray(data)) {
+      const obj = (data as { key: string; value: unknown }[]).reduce(
+        (acc, { key, value }) => ({ ...acc, [key]: value }),
+        {} as Record<string, unknown>,
+      )
+      setValues(obj)
+    } else {
+      setValues(data as Record<string, unknown>)
+    }
   }, [data])
 
   const saveMutation = useMutation({

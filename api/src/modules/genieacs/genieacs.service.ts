@@ -183,13 +183,24 @@ export class GenieAcsService implements OnModuleInit {
     fileType: string,
     buffer: Buffer,
     mimeType = 'application/octet-stream',
+    meta?: { vendor?: string; equipType?: string; model?: string; version?: string },
   ): Promise<void> {
-    await this.client.put(`/files/${encodeURIComponent(fileName)}`, buffer, {
-      headers: {
-        'Content-Type': mimeType,
-        'fileType': fileType,
-      },
+    const headers: Record<string, string> = {
+      'Content-Type': mimeType,
+      'fileType': fileType,
+    };
+    if (meta?.vendor)    headers['x-vendor']     = meta.vendor;
+    if (meta?.equipType) headers['x-equip-type'] = meta.equipType;
+    if (meta?.model)     headers['x-model']      = meta.model;
+    if (meta?.version)   headers['x-version']    = meta.version;
+    await this.client.put(`/files/${encodeURIComponent(fileName)}`, buffer, { headers });
+  }
+
+  async downloadFile(fileName: string): Promise<Buffer> {
+    const resp = await this.client.get(`/files/${encodeURIComponent(fileName)}`, {
+      responseType: 'arraybuffer',
     });
+    return Buffer.from(resp.data as ArrayBuffer);
   }
 
   async deleteFile(fileName: string): Promise<void> {
