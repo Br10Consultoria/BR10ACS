@@ -23,9 +23,11 @@ interface AutoConfigRule {
     firmwareVersion?: string
     serialPattern?: string
     tags?: string[]
+    tr069Event?: string
   }
   parameters: { name: string; value: string; type: string }[]
   tagsToAdd: string[]
+  ixcIntegrationId?: string
   stats: { applied: number; errors: number; lastApplied?: string }
 }
 
@@ -42,7 +44,8 @@ interface DryRunResult {
   manufacturer: string
   model: string
   oui: string
-  matches: { rule: string; id: string; parameters: number; tags: string[] }[]
+  tr069Event?: string
+  matches: { rule: string; id: string; parameters: number; tags: string[]; hasVariables: boolean }[]
   total: number
 }
 
@@ -202,6 +205,8 @@ function AutoconfigWizard({
   const [model, setModel] = useState(initial?.conditions?.model || '')
   const [firmwareVersion, setFirmwareVersion] = useState(initial?.conditions?.firmwareVersion || '')
   const [serialPattern, setSerialPattern] = useState(initial?.conditions?.serialPattern || '')
+  const [tr069Event, setTr069Event] = useState(initial?.conditions?.tr069Event || '')
+  const [ixcIntegrationId, setIxcIntegrationId] = useState(initial?.ixcIntegrationId || '')
 
   // Step 3 — Ações
   const [parameters, setParameters] = useState<{ name: string; value: string; type: string }[]>(
@@ -239,9 +244,11 @@ function AutoconfigWizard({
         ...(model.trim() && { model: model.trim() }),
         ...(firmwareVersion.trim() && { firmwareVersion: firmwareVersion.trim() }),
         ...(serialPattern.trim() && { serialPattern: serialPattern.trim() }),
+        ...(tr069Event && tr069Event !== 'ANY' && { tr069Event }),
       },
       parameters,
       tagsToAdd,
+      ...(ixcIntegrationId.trim() && { ixcIntegrationId: ixcIntegrationId.trim() }),
     })
   }
 
@@ -378,6 +385,42 @@ function AutoconfigWizard({
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              {/* Evento TR-069 */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Evento TR-069 (Gatilho)</label>
+                <select
+                  value={tr069Event}
+                  onChange={e => setTr069Event(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">— Qualquer evento (padrão) —</option>
+                  <option value="BOOTSTRAP">BOOTSTRAP — ONT ligou após reset de fábrica</option>
+                  <option value="BOOT">BOOT — ONT reiniciou normalmente</option>
+                  <option value="PERIODIC">PERIODIC — Inform periódico</option>
+                  <option value="VALUE_CHANGE">VALUE_CHANGE — Parâmetro monitorado mudou</option>
+                  <option value="ANY">ANY — Qualquer evento (explícito)</option>
+                </select>
+                {tr069Event === 'BOOTSTRAP' && (
+                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Ideal para reconfigurar ONTs após reset. Você pode usar <code className="bg-amber-50 px-1 rounded">$&#123;ixc.pppoe_login&#125;</code> nas ações.
+                  </p>
+                )}
+              </div>
+
+              {/* ID da integração IXC */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">ID da Integração IXC (opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Deixe vazio para usar a primeira integração IXC ativa"
+                  value={ixcIntegrationId}
+                  onChange={e => setIxcIntegrationId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Necessário apenas se você tiver múltiplas integrações IXC configuradas.</p>
+              </div>
+
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2">
                 <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-700">
@@ -484,6 +527,40 @@ function AutoconfigWizard({
                   </button>
                 </div>
               </div>
+
+              {/* Painel de variáveis disponíveis */}
+              <details className="group">
+                <summary className="cursor-pointer text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 select-none">
+                  <ChevronRight className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" />
+                  Variáveis disponíveis para os valores
+                </summary>
+                <div className="mt-2 bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-2">
+                  <p className="text-xs text-slate-500">Use essas variáveis no campo <strong>Valor</strong> dos parâmetros. O sistema as substitui pelo valor real antes de enviar à ONT.</p>
+                  <div className="space-y-1">
+                    {[
+                      ['${ixc.pppoe_login}', 'Login PPPoE buscado no IXC pelo MAC da ONT'],
+                      ['${ixc.pppoe_password}', 'Senha PPPoE buscada no IXC'],
+                      ['${ixc.wifi_ssid}', 'SSID WiFi 2.4GHz lido do GenieACS'],
+                      ['${ixc.wifi_password}', 'Senha WiFi lida do GenieACS'],
+                      ['${ixc.wifi_ssid_5g}', 'SSID WiFi 5GHz lido do GenieACS'],
+                      ['${ixc.vlan_pppoe}', 'VLAN PPPoE cadastrada no IXC'],
+                      ['${device.serialNumber}', 'Serial number da ONT'],
+                      ['${device.manufacturer}', 'Fabricante da ONT'],
+                      ['${device.model}', 'Modelo da ONT'],
+                      ['${device.softwareVersion}', 'Versão do firmware'],
+                      ['${param.CAMINHO_TR069}', 'Valor de qualquer parâmetro TR-069 já lido pelo GenieACS'],
+                    ].map(([v, desc]) => (
+                      <div key={v} className="flex gap-2 items-start">
+                        <code className="text-xs font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 whitespace-nowrap flex-shrink-0">{v}</code>
+                        <span className="text-xs text-slate-500">{desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Exemplo: para reconfigurar PPPoE após reset, use <code className="bg-slate-100 px-1 rounded">${'{'}ixc.pppoe_login{'}'}</code> no campo Username e <code className="bg-slate-100 px-1 rounded">${'{'}ixc.pppoe_password{'}'}</code> no campo Password.
+                  </p>
+                </div>
+              </details>
 
               {parameters.length === 0 && tagsToAdd.length === 0 && (
                 <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-2">

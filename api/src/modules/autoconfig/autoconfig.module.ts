@@ -4,11 +4,13 @@ import { AutoConfigService } from './autoconfig.service';
 import { AutoConfigController } from './autoconfig.controller';
 import { AutoConfig, AutoConfigSchema } from './schemas/autoconfig.schema';
 import { LogsModule } from '../logs/logs.module';
+import { IntegrationsModule } from '../integrations/integrations.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: AutoConfig.name, schema: AutoConfigSchema }]),
     LogsModule,
+    IntegrationsModule,
   ],
   controllers: [AutoConfigController],
   providers: [AutoConfigService],

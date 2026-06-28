@@ -384,6 +384,49 @@ export class IxcService {
     }
   }
 
+  // ── Busca de senha PPPoE ──────────────────────────────────────────────────
+
+  /**
+   * Busca a senha PPPoE de um usuário RADIUS pelo login.
+   * O IXC retorna a senha no campo `senha` do registro radusuarios.
+   * ATENÇÃO: Requer que a API IXC tenha permissão de leitura do campo senha.
+   */
+  async getRadUserPassword(
+    integrationId: string,
+    login: string,
+  ): Promise<{ found: boolean; password?: string; error?: string }> {
+    const integration = await this.integrationModel.findById(integrationId).exec();
+    if (!integration) return { found: false, error: 'Integração não encontrada' };
+    if (!integration.enabled) return { found: false, error: 'Integração desabilitada' };
+    const axiosCfg = this.buildAxiosCfg(integration);
+    try {
+      const result = await this.ixcList<IxcRadUsuario & { senha?: string; password?: string; cleartext_password?: string; rad_passwd?: string }>(
+        axiosCfg,
+        '/webservice/v1/radusuarios',
+        'radusuarios.login',
+        login,
+        '=',
+        1,
+      );
+      if (!result.registros || result.registros.length === 0) {
+        return { found: false, error: 'Usuário não encontrado' };
+      }
+      const user = result.registros[0] as any;
+      // O campo pode ser 'senha', 'password' ou 'cleartext_password' dependendo da versão do IXC
+      const password: string = user.senha || user.password || user.cleartext_password || user.rad_passwd || '';
+      await this.integrationModel.findByIdAndUpdate(integrationId, {
+        $inc: { 'stats.requests': 1 },
+        $set: { 'stats.lastUsed': new Date() },
+      });
+      return { found: true, password };
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro desconhecido';
+      this.logger.error(`IXC getRadUserPassword falhou para login=${login}: ${msg}`);
+      await this.integrationModel.findByIdAndUpdate(integrationId, { $inc: { 'stats.errors': 1 } });
+      return { found: false, error: msg };
+    }
+  }
+
   // ── Importar coleção de API (auto-implementação) ──────────────────────────
 
   /**
