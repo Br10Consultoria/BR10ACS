@@ -53,6 +53,12 @@ export class AutoConfigController {
   @ApiOperation({ summary: 'Forçar execução imediata em todos os dispositivos' })
   async applyAll() { return this.autoConfigService.applyAll(); }
 
+  @Post('apply-auto-tags')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Aplicar tags automáticas (fabricante, modelo, firmware) em todos os dispositivos' })
+  async applyAutoTags() { return this.autoConfigService.applyAutoTags(); }
+
   @Post('apply/:deviceId')
   @Roles(UserRole.OPERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)

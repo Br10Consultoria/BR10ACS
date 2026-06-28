@@ -58,11 +58,17 @@ function detectVendor(filename: string): string {
 
 function detectEquipType(filename: string, vendor: string): string {
   const l = filename.toLowerCase()
+  // Padrões de firmware de OLT (incluindo bootrom, bootloader e modelos específicos)
   if (
-    l.includes('olt') || l.includes('ma5800') || l.includes('ma5600') || l.includes('ma5683') ||
+    l.includes('olt') || l.includes('bootrom') || l.includes('bootloader') || l.includes('boot_room') ||
+    l.includes('ma5800') || l.includes('ma5600') || l.includes('ma5683') ||
     l.includes('c300') || l.includes('c320') || l.includes('c600') || l.includes('an6000') ||
     l.includes('isam') || l.includes('7342') || l.includes('7360') || l.includes('dm4610') ||
-    l.includes('dm4612') || l.includes('parks') || l.includes('v1600')
+    l.includes('dm4612') || l.includes('parks') || l.includes('v1600') ||
+    // Intelbras OLT: padrões V100R, V200R com sufixo oem em firmwares de OLT
+    (l.includes('v100r') && (l.includes('oem') || l.includes('intelbras'))) ||
+    (l.includes('v200r') && (l.includes('oem') || l.includes('intelbras'))) ||
+    l.includes('_oem_intelbras') || l.includes('_oem_olt')
   ) return 'olt'
   if (
     l.includes('ont') || l.includes('onu') || l.includes('hg8') || l.includes('eg8') ||

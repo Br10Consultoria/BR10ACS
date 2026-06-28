@@ -148,6 +148,71 @@ export class AutoConfigService {
     return { devices: devices.length, applications, errors };
   }
 
+  /**
+   * Aplica tags automáticas em todos os dispositivos baseado em fabricante, modelo e firmware.
+   * Tags geradas: fabricante (ex: "intelbras"), modelo (ex: "1200R"), firmware (ex: "fw:2.2-250203").
+   * Chamado pelo cron horário e também exposto via endpoint manual.
+   */
+  async applyAutoTags(): Promise<{ devices: number; tagged: number; errors: number }> {
+    const devices = await this.genieAcsService.getDevices({}, [
+      '_id', '_tags', 'DeviceID',
+      'InternetGatewayDevice.DeviceInfo.Manufacturer',
+      'InternetGatewayDevice.DeviceInfo.ModelName',
+      'InternetGatewayDevice.DeviceInfo.SoftwareVersion',
+      'Device.DeviceInfo.Manufacturer',
+      'Device.DeviceInfo.ModelName',
+      'Device.DeviceInfo.SoftwareVersion',
+    ]);
+
+    let tagged = 0;
+    let errors = 0;
+
+    for (const device of devices) {
+      try {
+        const normalized = DeviceNormalizer.normalize(device);
+        if (!normalized?.id) continue;
+
+        const existingTags: string[] = device._tags || [];
+        const tagsToAdd: string[] = [];
+
+        // Tag de fabricante (normalizado, sem espaços)
+        if (normalized.manufacturer) {
+          const vendorTag = normalized.manufacturer.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
+          if (vendorTag && !existingTags.includes(vendorTag)) tagsToAdd.push(vendorTag);
+        }
+
+        // Tag de modelo
+        if (normalized.model) {
+          const modelTag = normalized.model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
+          if (modelTag && !existingTags.includes(modelTag)) tagsToAdd.push(modelTag);
+        }
+
+        // Tag de firmware (prefixada com "fw:" para não colidir com outras tags)
+        if (normalized.softwareVersion) {
+          const fwTag = `fw:${normalized.softwareVersion.replace(/\s+/g, '_')}`;
+          // Remove tags de firmware antigas (fw:*) antes de adicionar a nova
+          const oldFwTags = existingTags.filter(t => t.startsWith('fw:') && t !== fwTag);
+          for (const old of oldFwTags) {
+            await this.genieAcsService.removeTag(device._id, old).catch(() => {});
+          }
+          if (!existingTags.includes(fwTag)) tagsToAdd.push(fwTag);
+        }
+
+        for (const tag of tagsToAdd) {
+          await this.genieAcsService.addTag(device._id, tag);
+        }
+
+        if (tagsToAdd.length > 0) tagged++;
+      } catch (err: any) {
+        errors++;
+        this.logger.warn(`Erro ao aplicar auto-tags em ${device._id}: ${err?.message}`);
+      }
+    }
+
+    this.logger.log(`Auto-tags: ${tagged} dispositivos tagueados, ${errors} erros`);
+    return { devices: devices.length, tagged, errors };
+  }
+
   /** Estatísticas globais de autoconfig */
   async getStats(): Promise<{
     totalRules: number;
@@ -173,6 +238,10 @@ export class AutoConfigService {
   @Cron(CronExpression.EVERY_HOUR)
   async runAutoConfigCron(): Promise<void> {
     this.logger.log('Executando AutoConfig periódico...');
+
+    // Aplica tags automáticas (fabricante, modelo, firmware) em todos os dispositivos
+    this.applyAutoTags().catch(err => this.logger.warn(`Erro no applyAutoTags: ${err?.message}`));
+
     const configs = await this.autoConfigModel.find({ enabled: true }).exec();
     if (!configs.length) return;
 
