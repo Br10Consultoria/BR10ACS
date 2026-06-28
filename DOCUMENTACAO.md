@@ -35,9 +35,11 @@ Serviço executado em background (via `setInterval` a cada 5 minutos) que varre 
 
 ### 2.3. AutoConfig (`/autoconfig`)
 Sistema de provisionamento inteligente e dinâmico.
-* Permite criar regras condicionais (ex: "Se OUI for X e Modelo for Y").
+* Permite criar regras condicionais com filtros por OUI, modelo, firmware, serial (regex) e **evento TR-069** (`BOOTSTRAP`, `BOOT`, `PERIODIC`, `VALUE_CHANGE`).
 * Quando um dispositivo atende às condições, o sistema aplica parâmetros TR-069 específicos ou adiciona Tags automaticamente.
+* Suporta **variáveis dinâmicas** nos valores dos parâmetros: `${ixc.pppoe_login}`, `${ixc.pppoe_password}`, `${ixc.wifi_ssid}`, `${ixc.wifi_password}`, `${device.serialNumber}`, `${param.CAMINHO_TR069}` e outras. O sistema resolve as variáveis consultando o GenieACS e o IXC Soft antes de enviar o `setParameterValues` à ONT.
 * Roda de forma passiva (quando um dispositivo faz Inform) e ativa (via cron job de hora em hora).
+* **Reconfiguração pós-reset:** Ao criar uma regra com evento `BOOTSTRAP` e usar `${ixc.pppoe_login}` / `${ixc.pppoe_password}` nos parâmetros, a ONT é reconfigurada automaticamente após um reset de fábrica, sem intervenção humana. Ver `docs/API_AUTOCONFIG.md` e `docs/TR069_AUTOCONFIG.md` para detalhes completos.
 
 ### 2.4. Presets & Provisions (`/presets`)
 Interface direta para a engine nativa do GenieACS.

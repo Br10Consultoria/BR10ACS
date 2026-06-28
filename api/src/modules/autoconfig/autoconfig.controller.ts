@@ -33,7 +33,10 @@ export class AutoConfigController {
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Criar AutoConfig' })
+  @ApiOperation({ 
+    summary: 'Criar AutoConfig',
+    description: 'Cria uma nova regra de provisionamento automático. Suporta `conditions.tr069Event` (ex: BOOTSTRAP) e variáveis dinâmicas (`${ixc.pppoe_login}`, `${ixc.pppoe_password}`, `${ixc.wifi_ssid}`, `${ixc.wifi_password}`) nos valores dos parâmetros para reconfiguração automática pós-reset.'
+  })
   async create(@Body() body: any) { return this.autoConfigService.create(body); }
 
   @Put(':id')
@@ -62,7 +65,10 @@ export class AutoConfigController {
   @Post('apply/:deviceId')
   @Roles(UserRole.OPERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Aplicar AutoConfig a um dispositivo específico' })
+  @ApiOperation({ 
+    summary: 'Aplicar AutoConfig a um dispositivo específico',
+    description: 'Avalia e aplica regras de autoconfig no dispositivo. Pode ser disparado automaticamente via webhook do GenieACS no evento BOOTSTRAP.'
+  })
   async applyToDevice(@Param('deviceId') deviceId: string) {
     return this.autoConfigService.applyToDevice(deviceId);
   }

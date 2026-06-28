@@ -53,10 +53,31 @@ Para automatizar isso, o fluxo correto é usar a **Integração com o ERP (IXC, 
 1. A ONT reseta e envia `0 BOOTSTRAP`.
 2. O BR10ACS tem uma regra de AutoConfig configurada para rodar no evento `BOOTSTRAP`.
 3. A regra identifica o Serial da ONT.
-4. A regra (via script ou integração) consulta o IXC: *"Qual é o login PPPoE e a senha WiFi do cliente que tem a ONT com este Serial/MAC?"*
-5. O IXC retorna os dados.
-6. O BR10ACS envia os comandos TR-069 (`setParameterValues`) para reconfigurar o PPPoE e o WiFi.
-7. O BR10ACS adiciona a tag `reconfigurado`.
+4. O `AutoConfigService` consulta a integração IXC usando o MAC da ONT: *"Qual é o login PPPoE e a senha WiFi do cliente que tem a ONT com este Serial/MAC?"*
+5. O IXC retorna o login PPPoE. O serviço então consulta o IXC novamente para obter a senha PPPoE (`getRadUserPassword`).
+6. O `AutoConfigService` resolve as variáveis dinâmicas (ex: `${ixc.pppoe_login}`) nos parâmetros da regra.
+7. O BR10ACS envia os comandos TR-069 (`setParameterValues`) para reconfigurar o PPPoE e o WiFi.
+8. O BR10ACS adiciona as tags configuradas (ex: `reconfigurado`).
+
+### Variáveis Dinâmicas Suportadas
+
+Ao configurar uma regra de AutoConfig, você pode usar variáveis dinâmicas no campo **Valor** dos parâmetros. O sistema as substitui pelo valor real antes de enviar à ONT.
+
+| Variável | Descrição | Fonte |
+|---|---|---|
+| `${ixc.pppoe_login}` | Login PPPoE do cliente | IXC Soft (busca pelo MAC da ONT) |
+| `${ixc.pppoe_password}` | Senha PPPoE do cliente | IXC Soft (busca no `radusuarios`) |
+| `${ixc.wifi_ssid}` | SSID WiFi 2.4GHz anterior | GenieACS (último valor salvo) |
+| `${ixc.wifi_password}` | Senha WiFi anterior | GenieACS (último valor salvo) |
+| `${ixc.wifi_ssid_5g}` | SSID WiFi 5GHz anterior | GenieACS (último valor salvo) |
+| `${ixc.vlan_pppoe}` | VLAN PPPoE cadastrada | IXC Soft |
+| `${device.serialNumber}` | Serial number da ONT | GenieACS |
+| `${device.manufacturer}` | Fabricante da ONT | GenieACS |
+| `${device.model}` | Modelo da ONT | GenieACS |
+| `${device.softwareVersion}` | Versão do firmware | GenieACS |
+| `${param.CAMINHO}` | Qualquer parâmetro TR-069 | GenieACS (último valor salvo) |
+
+> **Nota de Fallback:** Se o IXC não retornar um valor (ex: senha não encontrada), a variável **não é substituída**. O GenieACS recebe o valor literal `${ixc.pppoe_password}` e, como medida de segurança do protocolo, o parâmetro na ONT não é alterado, mantendo o valor que já tinha antes do reset.
 
 ### Modelos de Parâmetros de Auto-Configuração
 
@@ -88,19 +109,23 @@ Para configurar uma regra de AutoConfig no painel do BR10ACS, você precisa defi
 
 ## 4. Como Configurar uma Regra Prática no Painel
 
-Para criar uma regra que configura ONTs novas (ou resetadas) automaticamente:
+Para criar uma regra que reconfigura ONTs resetadas automaticamente buscando dados no IXC:
 
 1. Vá em **Ferramentas → AutoConfig**.
 2. Clique em **Nova Regra**.
-3. **Identificação:** Dê o nome `Provisionamento_Intelbras_PPPoE`.
+3. **Identificação:** Dê o nome `Reconfigurar ONT após reset`. Prioridade: `90`. Status: `Ativa`.
 4. **Condições:**
-   - Fabricante / OUI: Selecione `INTELBRAS`.
-   - Evento: `0 BOOTSTRAP` (para rodar apenas quando a ONT ligar resetada/nova).
-   - Tags: Deixe vazio (ou adicione uma condição para NÃO ter a tag `provisionado` se sua versão de ACS suportar negação).
+   - Fabricante / OUI: Selecione `INTELBRAS` (ou o fabricante desejado).
+   - Evento TR-069 (Gatilho): Selecione **`BOOTSTRAP — ONT ligou após reset de fábrica`**.
+   - ID da Integração IXC: Deixe vazio (usa a padrão) ou preencha se tiver múltiplas integrações.
 5. **Ações (Parâmetros TR-069):**
-   - Adicione os parâmetros de PPPoE mostrados acima, usando variáveis se suportado pela sua integração, ou valores fixos para uma VLAN específica.
+   - Adicione os parâmetros usando as variáveis dinâmicas:
+     - `InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username` = `${ixc.pppoe_login}`
+     - `InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Password` = `${ixc.pppoe_password}`
+     - `InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID` = `${ixc.wifi_ssid}`
+     - `InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.PreSharedKey` = `${ixc.wifi_password}`
 6. **Tags a Adicionar:**
-   - Digite `provisionado` e aperte Enter.
+   - Digite `reconfigurado` e aperte Enter.
 7. Clique em **Criar Regra**.
 
-Quando a ONT resetar e comunicar com o ACS, a regra será acionada, os parâmetros aplicados e a tag `provisionado` inserida.
+Quando a ONT resetar e comunicar com o ACS (evento `0 BOOTSTRAP`), a regra será acionada, os dados serão buscados no IXC, os parâmetros aplicados na ONT, e a tag `reconfigurado` inserida.
