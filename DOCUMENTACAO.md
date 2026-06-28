@@ -129,7 +129,20 @@ O GenieACS não armazena histórico. O BR10ACS resolve isso com o serviço `Coll
 
 ---
 
-## 5. Manutenção e Troubleshooting
+## 5. Integrações
+
+O sistema possui integrações modulares:
+
+### 5.1. WhatsApp Business API (Atendente Digital)
+Permite autoatendimento via WhatsApp para os clientes finais.
+- **Identificação**: Login PPPoE ou CPF.
+- **Ações**: Troca de senha WiFi, senha PPPoE, reboot, status da conexão e consulta de contrato.
+- **Configuração**: Gerenciada na interface gráfica (`/whatsapp`), integrada nativamente com a Graph API v20 da Meta via Webhooks.
+- **Documentação técnica**: Consulte [`docs/WHATSAPP_BOT.md`](docs/WHATSAPP_BOT.md).
+
+---
+
+## 6. Manutenção e Troubleshooting
 
 * **Logs do Sistema:** A página "Logs do Sistema" exibe todos os eventos. Filtre por "Aviso" ou "Erro" para diagnosticar falhas no AutoConfig ou Operações em Massa.
 * **Falta de Histórico:** Se os gráficos de sinal ou banda estiverem vazios, certifique-se de que a CPE está online e que o fabricante expõe os parâmetros corretamente (ex: `InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.TotalBytesReceived`).

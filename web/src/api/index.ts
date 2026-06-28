@@ -157,6 +157,16 @@ export const telegramBotApi = {
     api.get('/telegram/webhook-info').then(r => r.data),
 }
 
+// ── WhatsApp Business ────────────────────────────────────────────────────────
+export const whatsappApi = {
+  getConfig: () => api.get('/whatsapp/config').then(r => r.data),
+  saveConfig: (data: Record<string, any>) => api.put('/whatsapp/config', data).then(r => r.data),
+  getInfo: () => api.get('/whatsapp/info').then(r => r.data),
+  getStats: () => api.get('/whatsapp/stats').then(r => r.data),
+  sendTestMessage: (phone: string, message?: string) =>
+    api.post('/whatsapp/test-message', { phone, message }).then(r => r.data),
+}
+
 // ── AI Config ───────────────────────────────────────────────────────────────────
 export const aiConfigApi = {
   status: () => api.get('/ai/status'),

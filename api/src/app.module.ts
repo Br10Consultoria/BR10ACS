@@ -32,6 +32,7 @@ import { AlertsModule } from './modules/alerts/alerts.module';
 import { SystemModule } from './modules/system/system.module';
 import { BackupModule } from './modules/backup/backup.module';
 import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
+import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -94,6 +95,7 @@ import { HealthController } from './health.controller';
     SystemModule,
     BackupModule,
     TelegramBotModule,
+    WhatsAppModule,
   ],
   controllers: [HealthController],
 })

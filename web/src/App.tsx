@@ -19,6 +19,7 @@ import IntegrationsPage from '@/pages/IntegrationsPage'
 import AiAnalysisPage from '@/pages/AiAnalysisPage'
 import DocsPage from '@/pages/DocsPage'
 import BackupPage from '@/pages/BackupPage'
+import WhatsAppPage from '@/pages/WhatsAppPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10000 } },
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="ai-analysis" element={<AiAnalysisPage />} />
             <Route path="docs" element={<DocsPage />} />
             <Route path="backup" element={<BackupPage />} />
+            <Route path="whatsapp" element={<WhatsAppPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
