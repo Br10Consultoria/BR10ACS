@@ -509,6 +509,23 @@ export default function DashboardPage() {
           </Table>
         )}
       </Card>
+      
+      <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-400 text-xs">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span>Sistema Online</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            <span>Versão: v1.0.1-rev1</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="font-medium text-slate-500">BR10 ACS — TR-069 Management Platform</span>
+          <span>© 2026 BR10 Consultoria</span>
+        </div>
+      </div>
     </div>
   )
 }

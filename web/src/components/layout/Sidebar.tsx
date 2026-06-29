@@ -144,6 +144,10 @@ export default function Sidebar() {
             <LogOut className="w-4 h-4" />
           </button>
         </div>
+        <div className="mt-2 px-2 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+          <span>v1.0.1-rev1</span>
+          <span className="bg-slate-800 px-1 rounded text-slate-400">PROD</span>
+        </div>
       </div>
     </aside>
   )
