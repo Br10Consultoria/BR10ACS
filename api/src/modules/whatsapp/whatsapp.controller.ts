@@ -21,7 +21,7 @@ import { UserRole } from '../users/schemas/user.schema';
 import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('WhatsApp')
-@Controller('whatsapp')
+@Controller('v1/whatsapp')
 export class WhatsAppController {
   private readonly logger = new Logger(WhatsAppController.name);
 
