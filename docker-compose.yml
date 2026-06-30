@@ -35,7 +35,7 @@ services:
     networks:
       - br10acs_net
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" --username ${MONGO_ROOT_USER:-admin} --password ${MONGO_ROOT_PASSWORD} --authenticationDatabase admin 2>/dev/null || mongosh --quiet --eval \"db.adminCommand('ping').ok\" 2>/dev/null"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -51,12 +51,16 @@ services:
     image: redis:7-alpine
     container_name: br10acs-redis
     restart: unless-stopped
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD}
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD}"
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - "256mb"
+      - --maxmemory-policy
+      - allkeys-lru
     volumes:
       - redis_data:/data
     networks:
