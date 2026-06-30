@@ -261,8 +261,11 @@ wait_healthy() {
 
     echo -n "  Aguardando $service"
     while [[ $elapsed -lt $max_wait ]]; do
-        STATUS=$(docker inspect --format='{{.State.Health.Status}}' "br10acs-$service" 2>/dev/null || echo "starting")
-        if [[ "$STATUS" == "healthy" ]]; then
+        HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "br10acs-$service" 2>/dev/null || echo "none")
+        RUNNING=$(docker inspect --format='{{.State.Running}}' "br10acs-$service" 2>/dev/null || echo "false")
+        # healthy: container com healthcheck passou
+        # none + running: container sem healthcheck (ex: Redis) — considera saudável se estiver rodando
+        if [[ "$HEALTH" == "healthy" ]] || { [[ "$HEALTH" == "none" ]] && [[ "$RUNNING" == "true" ]]; }; then
             echo -e " ${GREEN}✓${NC}"
             return 0
         fi
@@ -275,7 +278,7 @@ wait_healthy() {
 }
 
 wait_healthy "mongodb" 120
-wait_healthy "redis" 60
+wait_healthy "redis" 30
 sleep 10  # Aguarda GenieACS inicializar
 wait_healthy "api" 120
 
