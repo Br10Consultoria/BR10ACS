@@ -59,8 +59,15 @@ export class UsersController {
 
   @Put(':id')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Atualizar usuário' })
+  @ApiOperation({ summary: 'Atualizar usuário (PUT)' })
   async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
+    return this.usersService.update(id, dto);
+  }
+
+  @Patch(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Atualizar usuário parcialmente (PATCH)' })
+  async patch(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
   }
 

@@ -54,6 +54,13 @@ const DEFAULT_SETTINGS = [
   // ── OpenAI ────────────────────────────────────────────────────────────────
   { key: 'openai.apiKey', value: '', description: 'Chave de API da OpenAI para diagnóstico IA', isSecret: true },
   { key: 'openai.baseUrl', value: '', description: 'URL base da API OpenAI (deixe vazio para usar o padrão)' },
+  // ── WhatsApp Business ─────────────────────────────────────────────────────
+  { key: 'whatsapp.enabled', value: false, description: 'Habilitar integração WhatsApp Business Cloud API' },
+  { key: 'whatsapp.phoneNumberId', value: '', description: 'Phone Number ID do WhatsApp Business' },
+  { key: 'whatsapp.accessToken', value: '', description: 'Access Token da API do WhatsApp Business', isSecret: true },
+  { key: 'whatsapp.verifyToken', value: '', description: 'Token de verificação do webhook WhatsApp' },
+  { key: 'whatsapp.welcomeMessage', value: 'Olá! Sou o atendente virtual da BR10. Como posso ajudar?', description: 'Mensagem de boas-vindas do WhatsApp' },
+  { key: 'whatsapp.businessName', value: 'BR10 Consultoria', description: 'Nome da empresa no WhatsApp Business' },
 ];
 
 @Injectable()
