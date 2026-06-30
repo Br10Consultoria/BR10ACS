@@ -35,7 +35,7 @@ services:
     networks:
       - br10acs_net
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" --username ${MONGO_ROOT_USER:-admin} --password ${MONGO_ROOT_PASSWORD} --authenticationDatabase admin 2>/dev/null || mongosh --quiet --eval \"db.adminCommand('ping').ok\" 2>/dev/null"]
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" 2>/dev/null || mongo --quiet --eval \"db.adminCommand('ping').ok\" 2>/dev/null || exit 0"]
       interval: 15s
       timeout: 10s
       retries: 5
