@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -34,6 +34,7 @@ import { BackupModule } from './modules/backup/backup.module';
 import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { HealthController } from './health.controller';
+import { UsersService } from './modules/users/users.service';
 
 @Module({
   imports: [
@@ -98,5 +99,12 @@ import { HealthController } from './health.controller';
     WhatsAppModule,
   ],
   controllers: [HealthController],
+  providers: [],
 })
-export class AppModule {}
+export class AppModule implements OnApplicationBootstrap {
+  constructor(private readonly usersService: UsersService) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    await this.usersService.ensureSuperAdmin();
+  }
+}
