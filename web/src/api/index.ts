@@ -38,6 +38,8 @@ export const devicesApi = {
   removeTag: (id: string, tag: string) => api.delete(`/devices/${encodeURIComponent(id)}/tags/${encodeURIComponent(tag)}`),
   getTimeSeries: (id: string, from?: string, to?: string, limit = 200) =>
     api.get(`/devices/${encodeURIComponent(id)}/timeseries`, { params: { from, to, limit } }),
+  firmwareUpgrade: (id: string, fileName: string) =>
+    api.post(`/devices/${encodeURIComponent(id)}/firmware-upgrade`, { fileName }),
 }
 
 // ── System / Metrics ────────────────────────────────────────────────────────

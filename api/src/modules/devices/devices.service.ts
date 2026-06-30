@@ -151,6 +151,17 @@ export class DevicesService {
     return { message: `Refresh solicitado: ${ok}/${branches.length} ramos`, deviceId };
   }
 
+  async firmwareUpgrade(deviceId: string, fileName: string): Promise<any> {
+    const result = await this.genieAcsService.downloadFirmware(deviceId, fileName);
+    await this.logsService.warn(
+      `Atualização de firmware solicitada para ${deviceId}: ${fileName}`,
+      LogCategory.DEVICE,
+      { deviceId, fileName },
+      deviceId,
+    ).catch(() => {});
+    return result;
+  }
+
   async setParameter(deviceId: string, name: string, value: any, type: string): Promise<any> {
     return this.genieAcsService.setParameterValues(deviceId, [[name, value, type]]);
   }

@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -22,7 +22,7 @@ export interface AiAnalysisResult {
 }
 
 @Injectable()
-export class DiagnosticsService {
+export class DiagnosticsService implements OnModuleInit {
   private readonly logger = new Logger(DiagnosticsService.name);
   private openai: OpenAI | null = null;
 
@@ -39,6 +39,18 @@ export class DiagnosticsService {
     const baseURL = this.configService.get<string>('OPENAI_API_BASE');
     if (apiKey) {
       this.openai = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
+    }
+  }
+
+  /** Ao iniciar o módulo, tenta carregar a chave do banco de dados (prioridade sobre .env). */
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.reloadOpenAI();
+      if (this.openai) {
+        this.logger.log('OpenAI client inicializado com chave do banco de dados');
+      }
+    } catch {
+      // Banco pode não estar pronto ainda; será carregado sob demanda
     }
   }
 
@@ -211,16 +223,20 @@ export class DiagnosticsService {
   // ── Análise com IA ─────────────────────────────────────────────────────────
 
   async analyzeWithAI(deviceId: string, userId: string): Promise<AiAnalysisResult> {
+    // Se o cliente não foi inicializado pelo .env, tenta carregar do banco de dados
+    if (!this.openai) {
+      await this.reloadOpenAI();
+    }
     if (!this.openai) {
       return {
         severity: 'warning',
-        summary: 'IA não configurada. Defina OPENAI_API_KEY no arquivo .env para ativar o diagnóstico inteligente.',
+        summary: 'IA não configurada. Configure a chave da OpenAI na página de Análise IA ou defina OPENAI_API_KEY no arquivo .env.',
         issues: [],
         recommendations: [
           {
             priority: 'high',
-            action: 'Configurar OPENAI_API_KEY no .env',
-            reason: 'A análise por IA requer uma chave de API da OpenAI.',
+            action: 'Configurar a chave OpenAI na interface web (página Análise IA → Configurar IA)',
+            reason: 'A análise por IA requer uma chave de API da OpenAI. Você pode configurá-la diretamente pela interface sem precisar editar o .env.',
           },
         ],
       };

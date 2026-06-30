@@ -128,6 +128,17 @@ export class DevicesController {
     return this.devicesService.refresh(id);
   }
 
+  @Post(':id/firmware-upgrade')
+  @Roles(UserRole.OPERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Disparar atualização de firmware via TR-069 (download task)' })
+  async firmwareUpgrade(
+    @Param('id') id: string,
+    @Body() body: { fileName: string },
+  ) {
+    return this.devicesService.firmwareUpgrade(id, body.fileName);
+  }
+
   @Post(':id/parameters')
   @Roles(UserRole.OPERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.ACCEPTED)

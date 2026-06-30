@@ -4,9 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, RefreshCw, Power, RotateCcw, Wifi,
   Signal, Activity, Monitor, Code, Users, Search, Download, Tag, X, Trash2, History, User,
-  Building2, Phone, Mail, MapPin, ExternalLink, Loader2
+  Building2, Phone, Mail, MapPin, ExternalLink, Loader2, Upload, ChevronDown
 } from 'lucide-react'
-import { devicesApi, logsApi, integrationsApi } from '@/api'
+import { devicesApi, logsApi, integrationsApi, filesApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, Badge, LoadingScreen } from '@/components/ui'
 import { formatDistanceToNow, format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -45,6 +45,7 @@ export default function DeviceDetailPage() {
   const [showTagEditor, setShowTagEditor] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showFirmwareModal, setShowFirmwareModal] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qc = useQueryClient()
   // O React Router já decodifica automaticamente os parâmetros de rota;
@@ -151,6 +152,24 @@ export default function DeviceDetailPage() {
       qc.invalidateQueries({ queryKey: ['device', deviceId] })
     },
     onError: () => toast.error('Falha ao remover tag'),
+  })
+
+  const firmwareUpgradeMutation = useMutation({
+    mutationFn: (fileName: string) => devicesApi.firmwareUpgrade(deviceId, fileName),
+    onSuccess: () => {
+      toast.success('Atualização de firmware solicitada — aguarde o dispositivo reiniciar')
+      setShowFirmwareModal(false)
+    },
+    onError: () => toast.error('Falha ao solicitar atualização de firmware'),
+  })
+
+  const { data: firmwareFiles } = useQuery({
+    queryKey: ['files-firmware'],
+    queryFn: () => filesApi.listFiles().then(r => {
+      const files = r.data as Array<Record<string, unknown>>
+      return files.filter(f => String(f.fileType || '').includes('Firmware') || String(f.fileType || '').includes('1 Firmware'))
+    }),
+    enabled: showFirmwareModal,
   })
 
   if (isLoading) return <LoadingScreen />
@@ -388,7 +407,19 @@ export default function DeviceDetailPage() {
       {activeTab === 'info' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <Card>
-            <CardHeader><CardTitle>Dispositivo</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Dispositivo</CardTitle>
+                <button
+                  onClick={() => setShowFirmwareModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                  title="Atualizar firmware desta ONT"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Atualizar Firmware
+                </button>
+              </div>
+            </CardHeader>
             <CardContent className="space-y-3">
               {[
                 ['Serial', d.serialNumber],
@@ -401,7 +432,7 @@ export default function DeviceDetailPage() {
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between text-sm">
                   <span className="text-slate-500">{label as string}</span>
-                  <span className="font-medium text-slate-700 text-right max-w-[60%] truncate">{(value as string) || '—'}</span>
+                  <span className="font-medium text-slate-700 text-right max-w-[60%] truncate">{(value as string) || '\u2014'}</span>
                 </div>
               ))}
             </CardContent>
@@ -850,6 +881,79 @@ export default function DeviceDetailPage() {
             )}
           </CardContent>
         </Card>
+      )}
+      {/* ── Modal de Atualização de Firmware ─────────────────────────────────── */}
+      {showFirmwareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Upload className="w-5 h-5 text-blue-600" />
+                <h2 className="text-base font-semibold text-slate-800">Atualizar Firmware</h2>
+              </div>
+              <button onClick={() => setShowFirmwareModal(false)} className="p-1 rounded-lg hover:bg-slate-100">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+                <strong>Atenção:</strong> A ONT será reiniciada após a atualização. Certifique-se de selecionar o firmware correto para o modelo <strong>{(d.model as string) || 'desconhecido'}</strong>.
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Firmware atual</div>
+                <div className="text-sm font-mono bg-slate-50 rounded-lg px-3 py-2 text-slate-700">{(d.softwareVersion as string) || '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Selecionar firmware para instalar</div>
+                {!firmwareFiles ? (
+                  <div className="flex items-center gap-2 text-sm text-slate-400 py-4 justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Carregando arquivos...
+                  </div>
+                ) : firmwareFiles.length === 0 ? (
+                  <div className="text-sm text-slate-500 text-center py-4 bg-slate-50 rounded-lg">
+                    Nenhum firmware encontrado.<br />
+                    <span className="text-xs text-slate-400">Faça upload na página <strong>Arquivos</strong> com tipo "1 Firmware Upgrade Image".</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                    {firmwareFiles.map((f) => (
+                      <button
+                        key={String(f._id || f.fileName)}
+                        onClick={() => {
+                          const name = String(f._id || f.fileName)
+                          if (window.confirm(`Confirmar atualização de firmware para:\n${name}\n\nO dispositivo será reiniciado.`))
+                            firmwareUpgradeMutation.mutate(name)
+                        }}
+                        disabled={firmwareUpgradeMutation.isPending}
+                        className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-slate-700 truncate">{String(f._id || f.fileName)}</div>
+                          {f.metadata && (
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              {[String((f.metadata as Record<string,unknown>).vendor || ''), String((f.metadata as Record<string,unknown>).model || ''), String((f.metadata as Record<string,unknown>).version || '')].filter(Boolean).join(' • ')}
+                            </div>
+                          )}
+                        </div>
+                        {firmwareUpgradeMutation.isPending && <Loader2 className="w-4 h-4 animate-spin text-blue-500 ml-auto" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setShowFirmwareModal(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
