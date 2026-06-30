@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, RefreshCw, Power, RotateCcw, Wifi,
   Signal, Activity, Monitor, Code, Users, Search, Download, Tag, X, Trash2, History, User,
-  Building2, Phone, Mail, MapPin, ExternalLink, Loader2, Upload, ChevronDown
+  Building2, Phone, Mail, MapPin, ExternalLink, Loader2, Upload
 } from 'lucide-react'
 import { devicesApi, logsApi, integrationsApi, filesApi } from '@/api'
 import { Card, CardHeader, CardTitle, CardContent, Badge, LoadingScreen } from '@/components/ui'
@@ -931,11 +931,11 @@ export default function DeviceDetailPage() {
                         <Download className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-slate-700 truncate">{String(f._id || f.fileName)}</div>
-                          {f.metadata && (
-                            <div className="text-xs text-slate-400 mt-0.5">
-                              {[String((f.metadata as Record<string,unknown>).vendor || ''), String((f.metadata as Record<string,unknown>).model || ''), String((f.metadata as Record<string,unknown>).version || '')].filter(Boolean).join(' • ')}
-                            </div>
-                          )}
+                          {!!f.metadata && (() => {
+                            const m = f.metadata as Record<string, unknown>
+                            const info = [String(m.vendor || ''), String(m.model || ''), String(m.version || '')].filter(Boolean).join(' • ')
+                            return info ? <div className="text-xs text-slate-400 mt-0.5">{info}</div> : null
+                          })()}
                         </div>
                         {firmwareUpgradeMutation.isPending && <Loader2 className="w-4 h-4 animate-spin text-blue-500 ml-auto" />}
                       </button>
