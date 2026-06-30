@@ -1,17 +1,14 @@
 # =============================================================================
 # BR10ACS — docker-compose.yml (Servidor Completo — Instalação do Zero)
 #
-# Inclui todos os serviços em uma única rede Docker:
-#   MongoDB 7.x (fallback para 4.4 em CPUs sem AVX — defina MONGO_IMAGE no .env)
+# Serviços incluídos em uma única rede Docker (br10acs_net):
+#   MongoDB 7.x  (fallback para 4.4 em CPUs sem AVX — defina MONGO_IMAGE=mongo:4.4 no .env)
 #   Redis 7
-#   GenieACS CWMP  (porta CWMP_PORT, padrão 7547)
-#   GenieACS NBI   (porta 7557, apenas localhost)
-#   GenieACS FS    (porta 7567, apenas localhost)
-#   GenieACS UI    (porta 3000, apenas localhost)
-#   BR10ACS API    (porta API_PORT, padrão 8080)
+#   GenieACS     (CWMP :7547 | NBI :7557 | FS :7567 | UI :3000 — tudo em um container)
+#   BR10ACS API  (porta API_PORT, padrão 8080)
 #
 # Uso rápido:
-#   ./instalar.sh          # script orquestrador (recomendado)
+#   sudo ./instalar.sh          # recomendado — detecta AVX, gera senhas, sobe tudo
 #   — ou —
 #   cp .env.example .env && nano .env
 #   docker compose up -d --build
@@ -35,6 +32,8 @@ services:
     networks:
       - br10acs_net
     healthcheck:
+      # Compatível com mongo:4.4 (usa 'mongo') e mongo:7 (usa 'mongosh')
+      # O '|| exit 0' garante que o container não fique preso se nenhum cliente estiver disponível
       test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" 2>/dev/null || mongo --quiet --eval \"db.adminCommand('ping').ok\" 2>/dev/null || exit 0"]
       interval: 15s
       timeout: 10s
@@ -66,7 +65,7 @@ services:
     networks:
       - br10acs_net
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -76,127 +75,45 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ─── GenieACS CWMP ────────────────────────────────────────────────────────────
-  genieacs-cwmp:
+  # ─── GenieACS (CWMP + NBI + FS + UI em um único container) ───────────────────
+  # A imagem drumsergio/genieacs roda todos os serviços GenieACS internamente.
+  # Não use 'command' para separar serviços — a imagem já gerencia isso.
+  genieacs:
     image: drumsergio/genieacs:latest
-    container_name: br10acs-genieacs-cwmp
+    container_name: br10acs-genieacs
     restart: unless-stopped
-    command: genieacs-cwmp
     environment:
-      GENIEACS_CWMP_INTERFACE: "0.0.0.0"
-      GENIEACS_CWMP_PORT: "7547"
       GENIEACS_MONGODB_CONNECTION_URL: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/genieacs?authSource=admin
-      GENIEACS_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      GENIEACS_DEBUG: "false"
-      GENIEACS_LOGGER_STDOUT: "true"
+      GENIEACS_UI_JWT_SECRET: ${JWT_SECRET:-br10acs_genieacs_jwt_change_me}
+      GENIEACS_EXT_DIR: /opt/genieacs/ext
+      GENIEACS_CWMP_ACCESS_LOG_FILE: /var/log/genieacs/genieacs-cwmp-access.log
+      GENIEACS_NBI_ACCESS_LOG_FILE: /var/log/genieacs/genieacs-nbi-access.log
+      GENIEACS_FS_ACCESS_LOG_FILE: /var/log/genieacs/genieacs-fs-access.log
+      GENIEACS_UI_ACCESS_LOG_FILE: /var/log/genieacs/genieacs-ui-access.log
+      GENIEACS_DEBUG_FILE: /var/log/genieacs/genieacs-debug.yaml
     ports:
       - "${CWMP_PORT:-7547}:7547"
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - br10acs_net
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7547 2>&1 | head -1 | grep -q '' && exit 0 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
-
-  # ─── GenieACS NBI ─────────────────────────────────────────────────────────────
-  genieacs-nbi:
-    image: drumsergio/genieacs:latest
-    container_name: br10acs-genieacs-nbi
-    restart: unless-stopped
-    command: genieacs-nbi
-    environment:
-      GENIEACS_NBI_INTERFACE: "0.0.0.0"
-      GENIEACS_NBI_PORT: "7557"
-      GENIEACS_MONGODB_CONNECTION_URL: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/genieacs?authSource=admin
-      GENIEACS_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      GENIEACS_DEBUG: "false"
-      GENIEACS_LOGGER_STDOUT: "true"
-    ports:
       - "127.0.0.1:7557:7557"
+      - "127.0.0.1:7567:7567"
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - genieacs_ext:/opt/genieacs/ext
     depends_on:
       mongodb:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - br10acs_net
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- 'http://localhost:7557/devices?limit=1' > /dev/null 2>&1 && exit 0 || exit 1"]
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 60s
     logging:
       driver: "json-file"
       options:
         max-size: "50m"
         max-file: "5"
-
-  # ─── GenieACS FS (File Server — firmware) ────────────────────────────────────
-  genieacs-fs:
-    image: drumsergio/genieacs:latest
-    container_name: br10acs-genieacs-fs
-    restart: unless-stopped
-    command: genieacs-fs
-    environment:
-      GENIEACS_FS_INTERFACE: "0.0.0.0"
-      GENIEACS_FS_PORT: "7567"
-      GENIEACS_MONGODB_CONNECTION_URL: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/genieacs?authSource=admin
-      GENIEACS_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      GENIEACS_DEBUG: "false"
-      GENIEACS_LOGGER_STDOUT: "true"
-    ports:
-      - "127.0.0.1:7567:7567"
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    networks:
-      - br10acs_net
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
-
-  # ─── GenieACS UI ──────────────────────────────────────────────────────────────
-  genieacs-ui:
-    image: drumsergio/genieacs:latest
-    container_name: br10acs-genieacs-ui
-    restart: unless-stopped
-    command: genieacs-ui
-    environment:
-      GENIEACS_UI_INTERFACE: "0.0.0.0"
-      GENIEACS_UI_PORT: "3000"
-      GENIEACS_MONGODB_CONNECTION_URL: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/genieacs?authSource=admin
-      GENIEACS_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      GENIEACS_DEBUG: "false"
-      GENIEACS_LOGGER_STDOUT: "true"
-    ports:
-      - "127.0.0.1:3000:3000"
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - br10acs_net
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
 
   # ─── BR10ACS API ──────────────────────────────────────────────────────────────
   br10acs-api:
@@ -218,11 +135,11 @@ services:
       MONGODB_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/br10?authSource=admin
       # Redis
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       # GenieACS (via rede interna — nunca exposto externamente)
-      GENIEACS_NBI_URL: http://genieacs-nbi:7557
-      GENIEACS_CWMP_URL: http://genieacs-cwmp:7547
+      GENIEACS_NBI_URL: http://genieacs:7557
+      GENIEACS_CWMP_URL: http://genieacs:7547
     volumes:
       - br10acs_data:/app/data
     depends_on:
@@ -230,9 +147,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      genieacs-nbi:
-        condition: service_started
-      genieacs-cwmp:
+      genieacs:
         condition: service_started
     networks:
       - br10acs_net
@@ -255,6 +170,8 @@ volumes:
   mongodb_config:
     driver: local
   redis_data:
+    driver: local
+  genieacs_ext:
     driver: local
   br10acs_data:
     driver: local
