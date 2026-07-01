@@ -4,20 +4,27 @@ import Sidebar from './Sidebar'
 import { useAuthStore } from '@/store/auth.store'
 import { useQuery } from '@tanstack/react-query'
 import { systemApi } from '@/api'
+import React, { useState } from 'react'
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
   '/devices': 'Dispositivos',
   '/logs': 'Logs do Sistema',
   '/mass-ops': 'Operações em Massa',
-  '/presets': 'Presets & Provisões',
-  '/provisions': 'Presets & Provisões',
+  '/presets': 'Presets',
+  '/provisions': 'Provisões',
   '/files': 'Arquivos',
   '/settings': 'Configurações',
+  '/settings/telegram': 'Configurações — Telegram',
+  '/settings/email': 'Configurações — E-mail',
   '/users': 'Usuários',
   '/backup': 'Backup',
   '/docs': 'Documentação API',
   '/integrations': 'Integrações',
+  '/whatsapp': 'WhatsApp Business',
+  '/autoconfig': 'Autoconfig',
+  '/alerts': 'Alertas',
+  '/ai-analysis': 'Análise IA',
 }
 
 function MetricBadge({
@@ -55,7 +62,6 @@ function ServerMetrics() {
     staleTime: 25_000,
   })
 
-  // Relógio local atualizado a cada segundo
   const [now, setNow] = React.useState(new Date())
   React.useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -65,61 +71,59 @@ function ServerMetrics() {
   const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
   if (!data) {
-    return (
-      <MetricBadge icon={Clock} label="Hora" value={timeStr} color="blue" />
-    )
+    return <MetricBadge icon={Clock} label="Hora" value={timeStr} color="blue" />
   }
 
-  const cpuPct  = data.cpu?.usage ?? 0
-  const memPct  = data.memory?.usagePercent ?? 0
-  const diskPct = data.disk?.usagePercent ?? 0
+  const cpuPct   = data.cpu?.usage ?? 0
+  const memPct   = data.memory?.usagePercent ?? 0
+  const diskPct  = data.disk?.usagePercent ?? 0
   const diskUsed = data.disk?.usedGB ?? 0
   const diskTotal = data.disk?.totalGB ?? 0
-  const uptime  = data.uptime?.systemFormatted ?? '—'
+  const uptime   = data.uptime?.systemFormatted ?? '—'
 
   const cpuColor  = cpuPct  > 80 ? 'red' : cpuPct  > 60 ? 'amber' : 'green'
   const memColor  = memPct  > 85 ? 'red' : memPct  > 70 ? 'amber' : 'green'
   const diskColor = diskPct > 85 ? 'red' : diskPct > 70 ? 'amber' : 'green'
-
   const diskLabel = diskTotal > 0 ? `${diskUsed}/${diskTotal}GB` : `${diskPct}%`
 
   return (
     <div className="flex items-center gap-1.5">
-      <MetricBadge icon={Clock}       label="Hora"   value={timeStr}         color="blue"     />
+      <MetricBadge icon={Clock}       label="Hora"   value={timeStr}         color="blue"      />
       <MetricBadge icon={Cpu}         label="CPU"    value={`${cpuPct}%`}    color={cpuColor}  />
       <MetricBadge icon={MemoryStick} label="RAM"    value={`${memPct}%`}    color={memColor}  />
       <MetricBadge icon={HardDrive}   label="Disco"  value={diskLabel}       color={diskColor} />
-      <MetricBadge icon={Clock}       label="Uptime" value={uptime}          color="slate"    />
+      <MetricBadge icon={Clock}       label="Uptime" value={uptime}          color="slate"     />
     </div>
   )
 }
-
-// Importação lazy do React para o componente de estado local
-import React from 'react'
 
 export default function AppLayout() {
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
 
+  // Lê estado inicial do localStorage para evitar flash de layout
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebar_collapsed') === 'true' } catch { return false }
+  })
+
   const title = Object.entries(pageTitles).find(([path]) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
   )?.[1] || 'BR10 ACS'
 
+  const mainMargin = sidebarCollapsed ? 'ml-16' : 'ml-60'
+
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
-      <Sidebar />
+      <Sidebar onCollapse={setSidebarCollapsed} />
 
-      <div className="flex-1 flex flex-col ml-60 overflow-hidden">
+      <div className={`flex-1 flex flex-col ${mainMargin} overflow-hidden transition-all duration-300`}>
         {/* Topbar */}
         <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0">
           <h1 className="text-slate-800 font-semibold text-base">{title}</h1>
 
           <div className="flex items-center gap-3">
-            {/* Métricas do servidor */}
             <ServerMetrics />
-
             <div className="h-6 w-px bg-slate-200" />
-
             <button
               onClick={() => window.location.reload()}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"

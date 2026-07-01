@@ -20,6 +20,8 @@ import AiAnalysisPage from '@/pages/AiAnalysisPage'
 import DocsPage from '@/pages/DocsPage'
 import BackupPage from '@/pages/BackupPage'
 import WhatsAppPage from '@/pages/WhatsAppPage'
+import TelegramSettingsPage from '@/pages/settings/TelegramSettingsPage'
+import EmailSettingsPage from '@/pages/settings/EmailSettingsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10000 } },
@@ -48,6 +50,8 @@ export default function App() {
             <Route path="backup" element={<BackupPage />} />
             <Route path="whatsapp" element={<WhatsAppPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings/telegram" element={<TelegramSettingsPage />} />
+            <Route path="settings/email" element={<EmailSettingsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
