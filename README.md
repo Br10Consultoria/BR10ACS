@@ -307,61 +307,142 @@ Para ambientes com 3.000+ dispositivos, recomenda-se separar os serviços em nó
 
 ---
 
-## Instalação rápida
+## Instalação — Servidor do Zero
+
+> **Sistema operacional recomendado:** Ubuntu Server 24.04 LTS (Noble)
 
 ### Pré-requisitos
 
-- Docker Engine 24+ e Docker Compose v2
-- GenieACS rodando (CWMP na porta 7547, NBI na porta 7557)
-- MongoDB acessível (pode ser o mesmo do GenieACS)
+- Ubuntu Server 24.04 LTS (instalação mínima)
+- Acesso root ou sudo
+- Conexão com a internet
+- Portas liberadas no firewall: **8080** (interface web) e **7547** (CWMP/TR-069)
 
-### 1. Clonar e configurar
+### Instalação em três comandos
 
 ```bash
+# 1. Instalar git
+sudo apt install -y git
+
+# 2. Clonar o repositório
 git clone https://github.com/Br10Consultoria/BR10ACS.git
 cd BR10ACS
-cp api/.env.example api/.env
-nano api/.env
+
+# 3. Executar o instalador automático
+sudo ./instalar.sh
 ```
 
-### 2. Configurar variáveis obrigatórias
+O script `instalar.sh` realiza **todo o processo automaticamente**:
 
-```bash
-# api/.env — variáveis mínimas para produção
-MONGODB_URI=mongodb://geniacs-mongodb-1:27017/br10
-GENIEACS_NBI_URL=http://geniacs-genieacs-nbi-1:7557
-JWT_SECRET=<string-aleatória-de-64-chars>
-ENCRYPTION_KEY=<string-aleatória-de-32-chars>
-SESSION_SECRET=<string-aleatória-de-32-chars>
-```
+| Etapa | O que faz |
+|---|---|
+| 1 — Detecção de CPU | Verifica suporte a AVX e seleciona `mongo:7` (com AVX) ou `mongo:4.4` (sem AVX) |
+| 2 — Docker | Instala Docker Engine e Docker Compose plugin se não estiverem presentes |
+| 3 — Arquivo `.env` | Gera senhas criptografadas e preenche todas as variáveis automaticamente |
+| 4 — Containers | Faz build da API e sobe todos os 4 serviços |
+| 5 — Health check | Aguarda todos os serviços ficarem saudáveis |
+| 6 — Resumo | Exibe URL de acesso, portas e credenciais iniciais |
 
-### 3. Iniciar com Docker Compose
+Ao final, acesse a interface em `http://SEU_IP:8080`.
 
-```bash
-docker compose up -d --build
-```
+**Credenciais padrão do primeiro acesso:**
 
-### 4. Verificar saúde dos containers
+| Campo | Valor |
+|---|---|
+| Usuário | `admin` |
+| Senha | `Admin@br10acs` |
 
-```bash
-docker compose ps
-docker compose logs br10acs-api --tail=50
-```
-
-### 5. Acessar
-
-- **Interface web**: `http://SEU_IP:8080`
-- **API REST**: `http://SEU_IP:8080/api`
-- **Swagger**: `http://SEU_IP:8080/api/docs`
-- **Login padrão**: `admin` / `Admin@br10acs` — **altere imediatamente após o primeiro acesso!**
+> **Altere a senha imediatamente após o primeiro acesso.**
 
 ---
 
-## Atualização
+## Atualização — Servidor com Containers Existentes
+
+Para servidores que já possuem o BR10ACS instalado e rodando:
 
 ```bash
+cd BR10ACS
 git pull origin main
-docker compose up -d --build
+docker compose up -d --build br10acs-api
+```
+
+O `--build br10acs-api` reconstrói apenas a imagem da API. Os containers de MongoDB, Redis e GenieACS não são recriados e os dados são preservados nos volumes.
+
+Para ver os logs em tempo real após a atualização:
+
+```bash
+docker compose logs -f br10acs-api
+```
+
+---
+
+## Arquitetura dos Containers
+
+O `docker-compose.yml` sobe **4 containers** em uma rede privada isolada (`br10acs_net`):
+
+| Container | Imagem | Porta externa | Descrição |
+|---|---|---|---|
+| `br10acs-mongodb` | `mongo:7` ou `mongo:4.4` | — (apenas interno) | Banco de dados principal |
+| `br10acs-redis` | `redis:7-alpine` | — (apenas interno) | Cache e filas |
+| `br10acs-genieacs` | `drumsergio/genieacs:latest` | `7547` (CWMP) | Engine TR-069 (CWMP + NBI + FS + UI) |
+| `br10acs-api` | Build local | `8080` | Interface web + API REST |
+
+> **Sobre o suporte a AVX:** O MongoDB 5.0+ exige AVX no processador. O `instalar.sh` detecta automaticamente e usa `mongo:4.4` em CPUs sem AVX (VMs antigas, Proxmox/KVM legado). Para verificar manualmente: `grep -c avx /proc/cpuinfo` — se retornar `0`, use `mongo:4.4`.
+
+---
+
+## Funcionalidades
+
+### Atualização de Firmware de ONTs
+
+O botão **"Atualizar Firmware"** está disponível na aba **Informações** de cada dispositivo. Para utilizá-lo:
+
+1. Acesse **Arquivos** no menu lateral e faça upload do arquivo de firmware (tipo `1 Firmware Upgrade Image`)
+2. Abra o dispositivo desejado e vá para a aba **Informações**
+3. Clique em **"Atualizar Firmware"** no card do dispositivo
+4. Selecione o firmware da lista e confirme
+
+O sistema dispara o comando `Download` via GenieACS NBI e a ONT realiza a atualização automaticamente. O dispositivo será reiniciado ao final do processo.
+
+### Análise de IA (OpenAI)
+
+Diagnóstico inteligente de ONTs via GPT. A chave da API pode ser configurada de duas formas:
+
+- **Via interface web** (recomendado): acesse **Análise IA → Configurar IA** e salve a chave — ela é armazenada criptografada no banco de dados e carregada automaticamente ao iniciar o servidor
+- **Via `.env`**: defina `OPENAI_API_KEY=sk-proj-...` (a chave do banco tem prioridade)
+
+### Integração WhatsApp Business
+
+Atendente digital via WhatsApp Cloud API (Meta). Para configurar:
+
+1. Acesse [developers.facebook.com](https://developers.facebook.com) e crie um App do tipo **Business**
+2. Adicione o produto **WhatsApp** ao App
+3. Em **WhatsApp → Configuração da API**, copie o **Phone Number ID** e o **Access Token**
+4. No BR10ACS, acesse **WhatsApp** no menu lateral e preencha as credenciais
+5. Configure o webhook na Meta apontando para: `http://SEU_IP:8080/api/v1/whatsapp/webhook`
+
+---
+
+## Comandos Úteis
+
+```bash
+# Ver status de todos os containers
+docker compose ps
+
+# Ver logs da API em tempo real
+docker compose logs -f br10acs-api
+
+# Reiniciar apenas a API (sem perder dados)
+docker compose restart br10acs-api
+
+# Reiniciar todos os serviços
+docker compose restart
+
+# Parar tudo
+docker compose down
+
+# Parar e remover volumes (APAGA TODOS OS DADOS)
+docker compose down -v
 ```
 
 ---
