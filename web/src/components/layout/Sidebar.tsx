@@ -1,11 +1,12 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Router, FileText, Settings, Users,
-  LogOut, ChevronRight, ChevronDown, Wifi, Activity,
+  LogOut, ChevronRight, ChevronDown, Activity,
   Layers, HardDrive, Code2, Bell, Cpu, Link2, Sparkles, BookOpen,
   Database, MessageCircle, Mail, Send, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import logoImg from '../../assets/logo.png'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
 import { authApi, alertsApi } from '@/api'
@@ -231,16 +232,10 @@ export default function Sidebar({ onCollapse }: { onCollapse?: (v: boolean) => v
 
         {/* ── Logo + Toggle ─────────────────────────────────────────────────── */}
         <div className={`flex items-center border-b border-slate-700/50 ${collapsed ? 'justify-center px-2 py-4' : 'gap-3 px-4 py-4'}`}>
-          {!collapsed && (
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
-              <Wifi className="w-4 h-4 text-white" />
-            </div>
-          )}
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="text-white font-bold text-sm leading-tight">BR10 ACS</div>
-              <div className="text-slate-400 text-xs">TR-069 Manager</div>
-            </div>
+          {collapsed ? (
+            <img src={logoImg} alt="BR10 ACS" className="w-8 h-8 object-contain" />
+          ) : (
+            <img src={logoImg} alt="BR10 ACS" className="h-10 w-auto object-contain flex-1 min-w-0" />
           )}
           <button
             onClick={toggleCollapse}
