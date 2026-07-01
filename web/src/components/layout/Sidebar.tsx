@@ -1,7 +1,7 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Router, FileText, Settings, Users,
-  LogOut, ChevronRight, ChevronLeft, ChevronDown, Wifi, Activity,
+  LogOut, ChevronRight, ChevronDown, Wifi, Activity,
   Layers, HardDrive, Code2, Bell, Cpu, Link2, Sparkles, BookOpen,
   Database, MessageCircle, Mail, Send, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
