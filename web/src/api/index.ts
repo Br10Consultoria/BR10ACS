@@ -176,6 +176,15 @@ export const whatsappApi = {
     api.post('/whatsapp/test-message', { phone, message }).then(r => r.data),
 }
 
+// u2500u2500 License u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500
+export const licenseApi = {
+  getInfo: () => api.get('/license').then(r => r.data),
+  getStatus: () => api.get('/license/status').then(r => r.data),
+  activate: (key: string) => api.post('/license/activate', { key }).then(r => r.data),
+  refresh: () => api.post('/license/refresh').then(r => r.data),
+  remove: () => api.delete('/license').then(r => r.data),
+}
+
 // ── AI Config ───────────────────────────────────────────────────────────────────
 export const aiConfigApi = {
   status: () => api.get('/ai/status'),

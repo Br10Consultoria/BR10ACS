@@ -33,6 +33,7 @@ import { SystemModule } from './modules/system/system.module';
 import { BackupModule } from './modules/backup/backup.module';
 import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
+import { LicenseModule } from './modules/license/license.module';
 import { HealthController } from './health.controller';
 import { UsersService } from './modules/users/users.service';
 
@@ -97,6 +98,7 @@ import { UsersService } from './modules/users/users.service';
     BackupModule,
     TelegramBotModule,
     WhatsAppModule,
+    LicenseModule,
   ],
   controllers: [HealthController],
   providers: [],

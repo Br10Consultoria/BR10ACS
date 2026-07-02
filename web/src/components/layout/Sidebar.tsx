@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Router, FileText, Settings, Users,
   LogOut, ChevronRight, ChevronDown, Activity,
   Layers, HardDrive, Code2, Bell, Cpu, Link2, Sparkles, BookOpen,
-  Database, MessageCircle, Mail, Send, PanelLeftClose, PanelLeftOpen, Download,
+  Database, MessageCircle, Mail, Send, PanelLeftClose, PanelLeftOpen, Download, ShieldCheck,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import logoImg from '../../assets/logo.png'
@@ -313,6 +313,7 @@ export default function Sidebar({ onCollapse }: { onCollapse?: (v: boolean) => v
                 label="Sistema"
                 items={[
                   { to: '/system/update', icon: Download, label: 'Atualizar Sistema' },
+                  { to: '/license', icon: ShieldCheck, label: 'Licença' },
                 ]}
               />
             </div>
