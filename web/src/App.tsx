@@ -22,6 +22,7 @@ import BackupPage from '@/pages/BackupPage'
 import WhatsAppPage from '@/pages/WhatsAppPage'
 import TelegramSettingsPage from '@/pages/settings/TelegramSettingsPage'
 import EmailSettingsPage from '@/pages/settings/EmailSettingsPage'
+import SystemUpdatePage from '@/pages/SystemUpdatePage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10000 } },
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/telegram" element={<TelegramSettingsPage />} />
             <Route path="settings/email" element={<EmailSettingsPage />} />
+            <Route path="system/update" element={<SystemUpdatePage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

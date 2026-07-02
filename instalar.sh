@@ -230,6 +230,9 @@ SWAGGER_PATH=api/docs
 # WHATSAPP_API_URL=
 # WHATSAPP_API_TOKEN=
 # WHATSAPP_PHONE_NUMBER_ID=
+
+# ─── Atualização do Sistema ────────────────────────────────────────────────────────────────────────────────────
+PROJECT_DIR=${SCRIPT_DIR}
 ENVEOF
 
     success ".env criado com senhas seguras"

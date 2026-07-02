@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Router, FileText, Settings, Users,
   LogOut, ChevronRight, ChevronDown, Activity,
   Layers, HardDrive, Code2, Bell, Cpu, Link2, Sparkles, BookOpen,
-  Database, MessageCircle, Mail, Send, PanelLeftClose, PanelLeftOpen,
+  Database, MessageCircle, Mail, Send, PanelLeftClose, PanelLeftOpen, Download,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import logoImg from '../../assets/logo.png'
@@ -304,6 +304,15 @@ export default function Sidebar({ onCollapse }: { onCollapse?: (v: boolean) => v
                   { to: '/whatsapp', icon: MessageCircle, label: 'WhatsApp' },
                   { to: '/settings/telegram', icon: Send, label: 'Telegram' },
                   { to: '/settings/email', icon: Mail, label: 'E-mail' },
+                ]}
+              />
+
+              {/* Sistema */}
+              <CollapsibleGroup
+                icon={Download}
+                label="Sistema"
+                items={[
+                  { to: '/system/update', icon: Download, label: 'Atualizar Sistema' },
                 ]}
               />
             </div>

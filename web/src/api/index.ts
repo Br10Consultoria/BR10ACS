@@ -45,6 +45,13 @@ export const devicesApi = {
 // ── System / Metrics ────────────────────────────────────────────────────────
 export const systemApi = {
   getMetrics: () => api.get('/system/metrics').then(r => r.data),
+  getVersion: () => api.get('/system/version').then(r => r.data),
+  getUpdateStatus: () => api.get('/system/update/status').then(r => r.data),
+  getUpdateStreamUrl: () => {
+    const base = String(api.defaults.baseURL || '')
+    const token = localStorage.getItem('br10_access_token') || ''
+    return `${base}/system/update/stream?token=${encodeURIComponent(token)}`
+  },
 }
 
 // ── Backup ───────────────────────────────────────────────────────────────────

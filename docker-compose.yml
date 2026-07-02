@@ -135,8 +135,14 @@ services:
       # GenieACS (via rede interna — nunca exposto externamente)
       GENIEACS_NBI_URL: http://genieacs:7557
       GENIEACS_CWMP_URL: http://genieacs:7547
+      # Atualização do sistema — caminho do projeto no host
+      PROJECT_DIR: ${PROJECT_DIR:-/opt/BR10ACS}
     volumes:
       - br10acs_data:/app/data
+      # Docker socket — necessário para o recurso de atualização do sistema
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Diretório do projeto no host — necessário para git pull e docker compose
+      - ${PROJECT_DIR:-/opt/BR10ACS}:${PROJECT_DIR:-/opt/BR10ACS}
     depends_on:
       mongodb:
         condition: service_healthy

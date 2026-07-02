@@ -1,11 +1,17 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Res, UseGuards, Sse, MessageEvent } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { SystemUpdateService } from './system-update.service';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import * as os from 'os';
 import { execSync } from 'child_process';
+import { Response } from 'express';
 
 @Controller('v1/system')
 @UseGuards(JwtAuthGuard)
 export class SystemController {
+  constructor(private readonly updateService: SystemUpdateService) {}
+
   @Get('metrics')
   getMetrics() {
     const cpus = os.cpus();
@@ -38,11 +44,10 @@ export class SystemController {
     let diskFree = 0;
     let diskUsagePercent = 0;
     try {
-      // df -k / retorna blocos de 1KB
       const dfOutput = execSync("df -k / 2>/dev/null | tail -1", { timeout: 3000 }).toString().trim();
       const parts = dfOutput.split(/\s+/);
       if (parts.length >= 4) {
-        diskTotal = parseInt(parts[1]) * 1024;   // bytes
+        diskTotal = parseInt(parts[1]) * 1024;
         diskUsed  = parseInt(parts[2]) * 1024;
         diskFree  = parseInt(parts[3]) * 1024;
         diskUsagePercent = diskTotal > 0 ? Math.round((diskUsed / diskTotal) * 100) : 0;
@@ -95,6 +100,30 @@ export class SystemController {
       },
     };
   }
+
+  // ── Atualização do Sistema ────────────────────────────────────────────────
+
+  @Get('version')
+  async getVersion() {
+    return this.updateService.getVersionInfo();
+  }
+
+  @Get('update/status')
+  getUpdateStatus() {
+    return { updating: this.updateService.isUpdating() };
+  }
+
+  @Sse('update/stream')
+  updateStream(): Observable<MessageEvent> {
+    const subject = this.updateService.startUpdate();
+    return subject.pipe(
+      map((line) => ({
+        data: JSON.stringify(line),
+      } as MessageEvent)),
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   private formatUptime(seconds: number): string {
     const d = Math.floor(seconds / 86400);
