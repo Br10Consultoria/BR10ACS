@@ -215,8 +215,8 @@ export class LicenseService implements OnModuleInit {
     this.logger.log('Verificação agendada de licença...');
     try {
       await this.refreshLicense();
-    } catch (err) {
-      this.logger.warn(`Verificação agendada falhou: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.warn(`Verificação agendada falhou: ${(err as Error).message}`);
     }
   }
 
@@ -275,8 +275,8 @@ export class LicenseService implements OnModuleInit {
         plan: data.plan,
         maxDevices: data.maxDevices,
       };
-    } catch (err) {
-      this.logger.warn(`Falha ao contatar servidor de licenças: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.warn(`Falha ao contatar servidor de licenças: ${(err as Error).message}`);
       return null;
     }
   }
